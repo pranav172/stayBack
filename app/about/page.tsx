@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, Instagram, Mail } from 'lucide-react'
+import { ArrowLeft, Mail } from 'lucide-react'
 
 const funStats = [
     {
@@ -76,29 +76,18 @@ export default function AboutPage() {
                     ))}
                 </div>
 
-                {/* Contact Section */}
+                {/* Contact Section - Email Only */}
                 <div className="mt-8 bg-primary/10 border border-primary/20 rounded-xl p-4">
                     <p className="text-xs text-primary font-medium mb-3">
                         ✨ Wanna collab or just vibe? Hit me up:
                     </p>
-                    <div className="flex justify-center gap-4">
-                        <a 
-                            href="https://instagram.com/i_felt.it" 
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-xs text-white/70 hover:text-pink-400 transition-colors bg-white/5 px-3 py-2 rounded-full"
-                        >
-                            <Instagram size={14} />
-                            @i_felt.it
-                        </a>
-                        <a 
-                            href="mailto:rloveumom@gmail.com"
-                            className="flex items-center gap-1.5 text-xs text-white/70 hover:text-blue-400 transition-colors bg-white/5 px-3 py-2 rounded-full"
-                        >
-                            <Mail size={14} />
-                            Email
-                        </a>
-                    </div>
+                    <a 
+                        href="mailto:rloveumom@gmail.com"
+                        className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-full"
+                    >
+                        <Mail size={16} />
+                        rloveumom@gmail.com
+                    </a>
                 </div>
 
                 {/* Footer */}
