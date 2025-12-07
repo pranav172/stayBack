@@ -12,10 +12,9 @@ export default function AboutPage() {
             </Link>
 
             <div className="text-center max-w-xs">
-                {/* Animated emoji */}
                 <div className="text-5xl mb-4 animate-bounce">🫡</div>
                 
-                <h1 className="text-xl font-bold animate-pulse">Just a Builder</h1>
+                <h1 className="text-xl font-bold">Built by a MUJite</h1>
                 
                 <p className="text-white/50 text-sm mt-3 leading-relaxed">
                     Made this for the homies stuck on campus. 
