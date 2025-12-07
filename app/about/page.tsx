@@ -12,17 +12,22 @@ export default function AboutPage() {
             </Link>
 
             <div className="text-center max-w-xs">
-                <div className="text-5xl mb-4">🫡</div>
-                <h1 className="text-xl font-bold">4th Year • Builder</h1>
-                <p className="text-white/50 text-sm mt-2">
-                    Made this for the homies stuck on campus. No one should be bored alone.
+                {/* Animated emoji */}
+                <div className="text-5xl mb-4 animate-bounce">🫡</div>
+                
+                <h1 className="text-xl font-bold animate-pulse">Just a Builder</h1>
+                
+                <p className="text-white/50 text-sm mt-3 leading-relaxed">
+                    Made this for the homies stuck on campus. 
+                    <br />
+                    <span className="text-white/30">No one should be bored alone.</span>
                 </p>
                 
                 <a 
                     href="mailto:rloveumom@gmail.com"
-                    className="mt-6 inline-flex items-center gap-2 text-xs text-white/60 hover:text-white transition-colors"
+                    className="mt-6 inline-flex items-center gap-2 text-xs text-white/40 hover:text-primary transition-all hover:scale-105"
                 >
-                    <Mail size={12} /> rloveumom@gmail.com
+                    <Mail size={12} /> say hi
                 </a>
             </div>
         </div>
