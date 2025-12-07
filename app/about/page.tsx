@@ -17,9 +17,9 @@ export default function AboutPage() {
                 <h1 className="text-xl font-bold">Built by a MUJite</h1>
                 
                 <p className="text-white/50 text-sm mt-3 leading-relaxed">
-                    Made this for the homies stuck on campus. 
+                    A safe space to talk, vent, or just vibe.
                     <br />
-                    <span className="text-white/30">No one should be bored alone.</span>
+                    <span className="text-white/30">Sometimes you just need someone to listen.</span>
                 </p>
                 
                 <a 
