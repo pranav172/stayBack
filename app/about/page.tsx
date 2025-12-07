@@ -1,26 +1,26 @@
 import Link from 'next/link'
 import { ArrowLeft, Mail } from 'lucide-react'
 
-const funStats = [
+const vibeCheck = [
     {
-        emoji: '☕',
-        value: '∞',
-        label: 'Coffees consumed'
+        emoji: '🎧',
+        value: 'Lofi + Raftaar',
+        label: 'Coding playlist'
     },
     {
-        emoji: '🌙',
-        value: '4 AM',
-        label: 'Sleep is a myth'
+        emoji: '🍜',
+        value: 'Maggi Expert',
+        label: '2 AM snack game strong'
     },
     {
-        emoji: '📚',
-        value: 'BTech',
-        label: 'The real side project'
+        emoji: '🎬',
+        value: '3 Idiots',
+        label: 'Movie that hits different'
     },
     {
-        emoji: '💀',
-        value: '99%',
-        label: 'Side projects failed'
+        emoji: '💡',
+        value: 'Builder',
+        label: 'Not a 9-5 corpo slave'
     }
 ]
 
@@ -40,63 +40,69 @@ export default function AboutPage() {
             <div className="max-w-md w-full text-center">
                 {/* Avatar */}
                 <div className="mb-6">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-primary to-purple-600 rounded-full text-4xl shadow-2xl shadow-primary/30 animate-pulse">
-                        🥷
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-primary to-purple-600 rounded-full text-4xl shadow-2xl shadow-primary/30">
+                        🫡
                     </div>
                 </div>
 
                 {/* Name & Title */}
-                <h1 className="text-2xl font-black tracking-tight">Anonymous Dev</h1>
-                <p className="text-white/50 text-sm mt-1">professional overthinker & builder 🛠️</p>
+                <h1 className="text-2xl font-black tracking-tight">4th Year Builder</h1>
+                <p className="text-white/50 text-sm mt-1">passionate • jobless • loves building stuff 🛠️</p>
 
                 {/* Bio Card */}
-                <div className="mt-6 bg-white/5 border border-white/10 rounded-2xl p-5 text-left">
+                <div className="mt-6 bg-white/5 border border-white/10 rounded-2xl p-5 text-left space-y-3">
                     <p className="text-white/80 text-sm leading-relaxed">
-                        College + Vacation + "Kuch interesting karte hain yaar" = Stayback 🎯
+                        Not here for placements, here for the <span className="text-primary font-medium">experience</span>. 
+                        Building random apps at 3 AM because corporate 9-5 feels like a prison.
                     </p>
-                    <p className="text-white/80 text-sm leading-relaxed mt-3">
-                        Recipe: 3 AM idea + coffee overdose + "ye definitely kaam karega" delusion
+                    <p className="text-white/80 text-sm leading-relaxed">
+                        Made <span className="text-primary font-medium">Stayback</span> for all the homies stuck 
+                        on campus during vacations. No one should be bored alone. 
                     </p>
-                    <p className="text-white/60 text-xs mt-3 italic">
-                        Graveyard of 99 failed side projects, but hey, this one shipped! 🚀
+                    <p className="text-white/60 text-xs italic">
+                        "Juniors ko help karna &gt; LinkedIn flex" 🤝
                     </p>
                 </div>
 
-                {/* Fun Stats Grid */}
+                {/* Vibe Check Grid */}
                 <div className="mt-6 grid grid-cols-2 gap-3">
-                    {funStats.map((stat, index) => (
+                    {vibeCheck.map((item, index) => (
                         <div 
                             key={index}
                             className="bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/[0.07] hover:scale-[1.02] transition-all"
                         >
-                            <span className="text-2xl">{stat.emoji}</span>
-                            <p className="text-lg font-bold mt-1">{stat.value}</p>
-                            <p className="text-[10px] text-white/40">{stat.label}</p>
+                            <span className="text-2xl">{item.emoji}</span>
+                            <p className="text-sm font-bold mt-1 text-white/90">{item.value}</p>
+                            <p className="text-[10px] text-white/40">{item.label}</p>
                         </div>
                     ))}
                 </div>
 
-                {/* Contact Section - Email Only */}
-                <div className="mt-8 bg-primary/10 border border-primary/20 rounded-xl p-4">
-                    <p className="text-xs text-primary font-medium mb-3">
-                        ✨ Wanna collab or just vibe? Hit me up:
+                {/* Message to Juniors */}
+                <div className="mt-6 bg-gradient-to-r from-primary/10 to-purple-500/10 border border-primary/20 rounded-xl p-4 text-left">
+                    <p className="text-xs text-white/70 leading-relaxed">
+                        <span className="text-primary font-bold">To my juniors:</span> College is short. 
+                        Build stuff. Break stuff. Meet people. Don't just chase placements — 
+                        chase experiences. The memories you make &gt; the package you get. 💯
                     </p>
+                </div>
+
+                {/* Contact */}
+                <div className="mt-6">
+                    <p className="text-xs text-white/40 mb-2">Ideas? Feedback? Collab?</p>
                     <a 
                         href="mailto:rloveumom@gmail.com"
-                        className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-full"
+                        className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-full border border-white/10"
                     >
-                        <Mail size={16} />
+                        <Mail size={14} />
                         rloveumom@gmail.com
                     </a>
                 </div>
 
                 {/* Footer */}
-                <div className="mt-8 space-y-1">
-                    <p className="text-white/20 text-[10px]">
-                        Built with ❤️, caffeine, and questionable life choices
-                    </p>
-                    <p className="text-white/10 text-[10px]">
-                        © 2024 Stayback
+                <div className="mt-8">
+                    <p className="text-white/15 text-[10px]">
+                        © 2024 Stayback • Made with ❤️ by someone who gets it
                     </p>
                 </div>
             </div>
