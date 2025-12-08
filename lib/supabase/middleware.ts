@@ -1,4 +1,3 @@
-
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -34,15 +33,27 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
+  // IMPORTANT: Don't run auth checks on auth callback route
+  // Let the callback handle session creation first
+  const pathname = request.nextUrl.pathname
+  if (pathname.startsWith('/auth/callback')) {
+    return response
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (request.nextUrl.pathname.startsWith('/home') && !user) {
+  // Protected routes - require login
+  const protectedRoutes = ['/home', '/chat', '/admin']
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+
+  if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  if (request.nextUrl.pathname === '/' && user) {
+  // Redirect to home if already logged in and visiting landing page
+  if (pathname === '/' && user) {
     return NextResponse.redirect(new URL('/home', request.url))
   }
 
