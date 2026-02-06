@@ -8,11 +8,12 @@ import {
   UserCheck,
   Activity,
 } from "lucide-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Secret admin page - only accessible if you know the URL
 // URL: /admin/0x1337 (obscure enough)
 
-async function getStats(supabase: any) {
+async function getStats(supabase: SupabaseClient) {
   // Total registered users
   const { count: totalUsers } = await supabase
     .from("users")
@@ -142,7 +143,7 @@ export default async function AdminDashboard() {
         <h2 className="text-sm font-bold text-white/70 mb-2">📊 Quick Notes</h2>
         <ul className="text-xs text-white/50 space-y-1">
           <li>• Refresh page to get latest stats</li>
-          <li>• "In Queue" = users waiting for a match right now</li>
+          <li>• &quot;In Queue&quot; = users waiting for a match right now</li>
           <li>• View full data in Supabase Dashboard → Table Editor</li>
         </ul>
       </div>
