@@ -1,60 +1,34 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import { OnlineCount } from '@/components/online-count'
 import { MatchButton } from '@/components/home/match-button'
-import Link from 'next/link'
-import { Info, Sparkles } from 'lucide-react'
 
-export default async function Dashboard() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    redirect('/')
-  }
-
+export default async function HomePage() {
   return (
     <div className="min-h-screen bg-secondary text-white flex flex-col p-4 md:p-8 relative overflow-hidden">
+        {/* Background Effects */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-primary/15 rounded-full blur-[100px]" />
+            <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-accent/15 rounded-full blur-[100px]" />
+        </div>
+
         {/* Header */}
-        <header className="flex justify-between items-center mb-8">
-            <h1 className="text-xl font-bold tracking-tight">Stayback</h1>
-            <div className="flex items-center gap-3">
-                <OnlineCount />
-            </div>
+        <header className="flex justify-between items-center mb-8 z-10">
+            <h1 className="text-xl font-bold tracking-tight gradient-text">mujAnon</h1>
+            <OnlineCount />
         </header>
 
         {/* Main Action */}
-        <main className="flex-1 flex flex-col items-center justify-center space-y-8 z-10">
+        <main className="flex-1 flex flex-col items-center justify-center z-10">
+            <div className="text-center mb-8">
+                <h2 className="text-3xl font-black mb-2">Find Someone</h2>
+                <p className="text-white/50">Anonymous 1-on-1 chat</p>
+            </div>
             
             <MatchButton />
-
-            <div className="text-center space-y-2 max-w-xs">
-                <p className="text-white/50 text-sm">Matching is anonymous.</p>
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 backdrop-blur-sm">
-                    <p className="text-xs text-white/70 italic">
-                        &quot;Ask: What&apos;s the wildest rumor you&apos;ve heard about Block A?&quot;
-                    </p>
-                </div>
-            </div>
-
         </main>
 
-        {/* Footer Links */}
-        <footer className="flex justify-center gap-6 py-4">
-            <Link 
-                href="/coming-soon" 
-                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
-            >
-                <Sparkles size={12} />
-                Coming Soon
-            </Link>
-            <Link 
-                href="/about" 
-                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
-            >
-                <Info size={12} />
-                About
-            </Link>
+        {/* Footer */}
+        <footer className="text-center py-4 z-10">
+            <p className="text-xs text-white/20">Chats disappear when you leave</p>
         </footer>
     </div>
   )

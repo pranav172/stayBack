@@ -1,56 +1,160 @@
+'use client'
 
-import { LoginForm } from '@/components/auth/login-form'
-import { OnlineCount } from '@/components/online-count'
+import { MatchButton } from '@/components/home/match-button'
+import { Suspense } from 'react'
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden bg-secondary">
-      {/* Background Glows */}
-      <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-primary/30 rounded-full blur-[128px] opacity-60 pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent/30 rounded-full blur-[128px] opacity-60 pointer-events-none" />
-
-      {/* Header / Online Count */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2">
-        <OnlineCount />
+    <div style={{ 
+      minHeight: '100vh',
+      height: '100vh',
+      backgroundColor: '#0a0a0f', 
+      position: 'relative', 
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Background gradient */}
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'linear-gradient(135deg, #0a0a0f 0%, #0f0f18 50%, #0a0a0f 100%)',
+        zIndex: 0
+      }}>
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.08), transparent), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(139, 92, 246, 0.05), transparent)'
+        }} />
       </div>
-
-      <main className="z-10 w-full max-w-md flex flex-col items-center text-center space-y-8">
+      
+      {/* Content */}
+      <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         
-        {/* Logo / Icon */}
-        <div className="w-24 h-24 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-center backdrop-blur-xl shadow-[0_0_40px_rgba(255,45,85,0.3)] mb-4">
-          <div className="text-4xl">💭</div> {/* Placeholder for speech bubble */}
-        </div>
+        {/* Header - compact */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ 
+              width: '32px', 
+              height: '32px', 
+              borderRadius: '8px', 
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              fontSize: '16px'
+            }}>
+              💬
+            </div>
+            <span style={{ fontWeight: 600, fontSize: '16px' }}>
+              <span style={{ color: 'rgba(255,255,255,0.9)' }}>muj</span>
+              <span style={{ color: '#818cf8' }}>Anon</span>
+            </span>
+          </div>
+          <span style={{ 
+            fontSize: '11px', 
+            color: '#52525b', 
+            border: '1px solid rgba(255,255,255,0.1)', 
+            padding: '4px 10px', 
+            borderRadius: '16px',
+            backgroundColor: 'rgba(255,255,255,0.03)'
+          }}>
+            Beta
+          </span>
+        </header>
 
-        {/* Hero Text */}
-        <div className="space-y-2">
-          <h1 className="text-5xl font-bold tracking-tight text-white drop-shadow-xl">
-            Stayback
-          </h1>
-          <p className="text-xl text-white/60 font-medium">
-            Your college. No names. Real talks.
+        {/* Main - fills remaining space */}
+        <main style={{ 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          padding: '0 16px',
+          overflow: 'auto'
+        }}>
+          <div style={{ 
+            maxWidth: '400px', 
+            width: '100%', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            textAlign: 'center', 
+            gap: '20px'
+          }}>
+            
+            {/* Title - more compact */}
+            <div>
+              <h1 style={{ 
+                fontSize: 'clamp(28px, 6vw, 40px)', 
+                fontWeight: 700, 
+                lineHeight: 1.1,
+                marginBottom: '8px'
+              }}>
+                <span style={{ color: '#fff' }}>Chat with </span>
+                <span style={{ 
+                  background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text'
+                }}>MUJians</span>
+              </h1>
+              <p style={{ color: '#71717a', fontSize: '15px' }}>
+                Anonymous. Instant. No judgments.
+              </p>
+            </div>
+
+            {/* Match Button */}
+            <Suspense fallback={
+              <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ 
+                  width: '24px', 
+                  height: '24px', 
+                  border: '2px solid #6366f1', 
+                  borderTopColor: 'transparent', 
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+              </div>
+            }>
+              <MatchButton />
+            </Suspense>
+
+            {/* Features - compact row */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px' }}>
+              {['🔒 Anonymous', '⚡ Instant', '💨 Auto-delete', '🛡️ Moderated'].map((feature) => (
+                <span 
+                  key={feature}
+                  style={{ 
+                    padding: '5px 10px', 
+                    fontSize: '12px', 
+                    color: '#52525b', 
+                    backgroundColor: 'rgba(255,255,255,0.03)', 
+                    borderRadius: '14px', 
+                    border: '1px solid rgba(255,255,255,0.06)'
+                  }}
+                >
+                  {feature}
+                </span>
+              ))}
+            </div>
+          </div>
+        </main>
+
+        {/* Footer - compact */}
+        <footer style={{ padding: '10px', textAlign: 'center', flexShrink: 0 }}>
+          <p style={{ fontSize: '11px', color: '#3f3f46' }}>
+            Manipal University Jaipur • Be respectful
           </p>
-        </div>
-
-        {/* Value Props */}
-        <div className="grid grid-cols-1 gap-3 w-full px-4">
-          <div className="p-4 bg-white/5 border border-white/5 rounded-2xl backdrop-blur-sm text-left">
-            <h3 className="text-pink-500 font-bold mb-1">ZERO OUTSIDERS</h3>
-            <p className="text-sm text-white/50">Only verified college emails allowed.</p>
-          </div>
-          <div className="p-4 bg-white/5 border border-white/5 rounded-2xl backdrop-blur-sm text-left">
-             <h3 className="text-purple-400 font-bold mb-1">DISAPPEARS FOREVER</h3>
-             <p className="text-sm text-white/50">Chats delete instantly when you leave.</p>
-          </div>
-        </div>
-
-        {/* Login Form Placeholder */}
-        <LoginForm />
-
-      </main>
-
-      <footer className="absolute bottom-6 text-xs text-white/20">
-        Launch ready • December 2025
-      </footer>
+        </footer>
+      </div>
+      
+      <style jsx global>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

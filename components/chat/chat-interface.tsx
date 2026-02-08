@@ -1,279 +1,723 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { Send, Instagram, LogOut, Sparkles, X, AlertCircle, ArrowLeft, Users } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { database, auth } from '@/lib/firebase'
+import { ref, push, set, onValue, remove, serverTimestamp } from 'firebase/database'
+import { onAuthStateChanged } from 'firebase/auth'
+import { Send, Instagram, ArrowLeft, Users, Check, X, Ghost, Flag, SkipForward, Clock, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { IceBreakers } from './icebreakers'
+import { moderateMessage, getWarningMessage, CHAT_LIMITS, formatTimeRemaining } from '@/lib/moderation'
+import ReportModal from './report-modal'
+import FeedbackModal from './feedback-modal'
 
 interface Message {
   id: string
-  chat_id: string
-  sender_id: string
+  senderId: string
   text: string
-  created_at: string
+  timestamp: number
 }
 
 export default function ChatInterface({ chatId, currentUserId }: { chatId: string, currentUserId: string }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [partnerOnline, setPartnerOnline] = useState(true)
-  const [showAi, setShowAi] = useState(false)
   const [onlineCount, setOnlineCount] = useState(0)
+  const [showSocialInput, setShowSocialInput] = useState<'insta' | 'snap' | null>(null)
+  const [socialUsername, setSocialUsername] = useState('')
+  const [shared, setShared] = useState<{ insta: boolean, snap: boolean }>({ insta: false, snap: false })
+  const [userId, setUserId] = useState<string | null>(currentUserId)
+  const [chatEnded, setChatEnded] = useState(false)
+  const [lastMessageTime, setLastMessageTime] = useState(0)
+  
+  const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now())
+  const [timeRemaining, setTimeRemaining] = useState(CHAT_LIMITS.SESSION_DURATION_MS)
+  const [messageCount, setMessageCount] = useState(0)
+  const [showWarning, setShowWarning] = useState(false)
+  const [warningMessage, setWarningMessage] = useState('')
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [partnerId, setPartnerId] = useState<string | null>(null)
+  const [lastPartnerMessageTime, setLastPartnerMessageTime] = useState<number>(Date.now())
+  const [showInactivityNudge, setShowInactivityNudge] = useState(false)
+  const [nextButtonDisabled, setNextButtonDisabled] = useState(false)
+  const [sessionExtended, setSessionExtended] = useState(false)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
   const router = useRouter()
+  const sessionId = useRef<string>('')
+  const partnerSessionRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    let sid = sessionStorage.getItem('stayback_session_id')
+    if (!sid) {
+      sid = crypto.randomUUID()
+      sessionStorage.setItem('stayback_session_id', sid)
+    }
+    sessionId.current = sid
+  }, [])
 
   const scrollToBottom = (behavior: 'smooth' | 'auto' = 'smooth') => {
-      messagesEndRef.current?.scrollIntoView({ behavior })
+    messagesEndRef.current?.scrollIntoView({ behavior })
   }
 
   useEffect(() => {
-    // Initial Load
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true })
-      
-      if (data) {
-          setMessages(data as Message[])
-          setTimeout(() => scrollToBottom('auto'), 100)
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - sessionStartTime
+      const remaining = CHAT_LIMITS.SESSION_DURATION_MS - elapsed
+      setTimeRemaining(remaining)
+      if (remaining <= 0) {
+        setChatEnded(true)
+        setShowFeedbackModal(true)
       }
-    }
-    fetchMessages()
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [sessionStartTime])
 
-    // Message Subscription
-    const msgChannel = supabase.channel(`chat_messages_${chatId}`)
-      .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'messages', 
-          filter: `chat_id=eq.${chatId}` 
-      }, (payload) => {
-        const newMessage = payload.new as Message
-        setMessages(prev => {
-            if (prev.some(m => m.id === newMessage.id)) return prev
-            if (prev.some(m => m.id.startsWith('temp-') && m.text === newMessage.text && m.sender_id === newMessage.sender_id)) {
-                return prev.map(m => 
-                    m.id.startsWith('temp-') && m.text === newMessage.text && m.sender_id === newMessage.sender_id 
-                    ? newMessage 
-                    : m
-                )
-            }
-            return [...prev, newMessage]
-        })
-      })
-      .subscribe()
+  useEffect(() => {
+    const checkInactivity = setInterval(() => {
+      const timeSinceLastMessage = Date.now() - lastPartnerMessageTime
+      if (timeSinceLastMessage >= CHAT_LIMITS.INACTIVITY_OFFER_MS && messages.length > 0) {
+        setShowInactivityNudge(true)
+      } else if (timeSinceLastMessage >= CHAT_LIMITS.INACTIVITY_NUDGE_MS && messages.length === 0) {
+        setShowInactivityNudge(true)
+      }
+    }, 10000)
+    return () => clearInterval(checkInactivity)
+  }, [lastPartnerMessageTime, messages.length])
 
-    // Partner Presence
-    const presenceChannel = supabase.channel(`presence_chat_${chatId}`, {
-        config: { presence: { key: currentUserId } }
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) setUserId(user.uid)
     })
-    
-    presenceChannel
-        .on('presence', { event: 'sync' }, () => {
-            const state = presenceChannel.presenceState()
-            const onlineUsers = Object.keys(state)
-            setPartnerOnline(onlineUsers.length >= 1)
-        })
-        .on('presence', { event: 'leave' }, ({ key }) => {
-            if (key !== currentUserId) {
-                setPartnerOnline(false)
-            }
-        })
-        .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await presenceChannel.track({ online_at: new Date().toISOString() })
-            }
-        })
 
-    // Global Online Count
-    const globalChannel = supabase.channel('online_users')
-    globalChannel
-        .on('presence', { event: 'sync' }, () => {
-            setOnlineCount(Object.keys(globalChannel.presenceState()).length)
-        })
-        .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await globalChannel.track({ user_id: currentUserId })
-            }
-        })
+    const messagesRef = ref(database, `messages/${chatId}`)
+    const unsubMessages = onValue(messagesRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val()
+        const messageList: Message[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        })).sort((a, b) => a.timestamp - b.timestamp)
+        setMessages(messageList)
+        setMessageCount(messageList.filter(m => m.senderId === userId).length)
+        
+        const partnerMessages = messageList.filter(m => m.senderId !== userId)
+        if (partnerMessages.length > 0) {
+          const lastPartnerMsg = partnerMessages[partnerMessages.length - 1]
+          setLastPartnerMessageTime(lastPartnerMsg.timestamp)
+          setShowInactivityNudge(false)
+        }
+      }
+    })
+
+    const chatRef = ref(database, `chats/${chatId}`)
+    const unsubChat = onValue(chatRef, async (snapshot) => {
+      if (snapshot.exists()) {
+        const chat = snapshot.val()
+        if (chat.user1 === currentUserId) {
+          setPartnerId(chat.user2)
+        } else {
+          setPartnerId(chat.user1)
+        }
+        if (!chat.isActive) {
+          setChatEnded(true)
+          setPartnerOnline(false)
+          setShowFeedbackModal(true)
+          return
+        }
+        const mySession = sessionId.current
+        if (chat.session1 === mySession) {
+          partnerSessionRef.current = chat.session2
+        } else if (chat.session2 === mySession) {
+          partnerSessionRef.current = chat.session1
+        }
+        if (partnerSessionRef.current) {
+          const partnerConnRef = ref(database, `connections/${partnerSessionRef.current}`)
+          onValue(partnerConnRef, (connSnap) => {
+            setPartnerOnline(connSnap.exists())
+          })
+        }
+      } else {
+        setChatEnded(true)
+        setPartnerOnline(false)
+      }
+    })
+
+    const connectionsRef = ref(database, 'connections')
+    const unsubConnections = onValue(connectionsRef, (snapshot) => {
+      const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0
+      setOnlineCount(count)
+    })
+
+    setTimeout(() => scrollToBottom('auto'), 100)
 
     return () => {
-      supabase.removeChannel(msgChannel)
-      supabase.removeChannel(presenceChannel)
-      supabase.removeChannel(globalChannel)
+      unsubAuth()
+      unsubMessages()
+      unsubChat()
+      unsubConnections()
     }
-  }, [chatId, supabase, currentUserId])
+  }, [chatId, currentUserId, userId])
 
   useEffect(() => {
     scrollToBottom()
   }, [messages])
 
-  const handleSend = async () => {
-    if (!inputText.trim()) return
+  useEffect(() => {
+    if (showWarning) {
+      const timer = setTimeout(() => setShowWarning(false), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [showWarning])
 
+  const handleSend = async () => {
+    if (!inputText.trim() || !userId || chatEnded) return
+    const now = Date.now()
+    if (now - lastMessageTime < CHAT_LIMITS.MESSAGE_RATE_LIMIT_MS) {
+      setWarningMessage('Slow down! Wait a moment before sending.')
+      setShowWarning(true)
+      return
+    }
+    if (messageCount >= CHAT_LIMITS.MAX_MESSAGES_PER_SESSION) {
+      setWarningMessage('Message limit reached for this session.')
+      setShowWarning(true)
+      return
+    }
+    const moderationResult = moderateMessage(inputText)
+    if (!moderationResult.isClean) {
+      if (moderationResult.shouldWarn) {
+        setWarningMessage(getWarningMessage(moderationResult.reason))
+        setShowWarning(true)
+      }
+      return
+    }
+    setLastMessageTime(now)
     const textPayload = inputText
     setInputText('')
-    setShowAi(false)
-    
-    const tempId = 'temp-' + Date.now()
-    const optimisticMsg: Message = {
-        id: tempId,
-        chat_id: chatId,
-        sender_id: currentUserId,
-        text: textPayload,
-        created_at: new Date().toISOString()
-    }
-    setMessages(prev => [...prev, optimisticMsg])
-    scrollToBottom()
-
-    const { error } = await supabase
-      .from('messages')
-      .insert({
-        chat_id: chatId,
-        sender_id: currentUserId,
-        text: textPayload
-      })
-
-    if (error) {
-      console.error('Send error:', error)
-    }
+    const messageRef = push(ref(database, `messages/${chatId}`))
+    await set(messageRef, {
+      senderId: userId,
+      text: textPayload,
+      timestamp: Date.now()
+    })
   }
 
-  const handleLeave = async () => {
-      await fetch('/api/cleanup', { method: 'POST' })
-      router.push('/home')
+  const handleShareSocial = async (platform: 'insta' | 'snap') => {
+    if (!socialUsername.trim() || !userId) return
+    const emoji = platform === 'insta' ? '📸' : '👻'
+    const name = platform === 'insta' ? 'Instagram' : 'Snapchat'
+    const message = `${emoji} My ${name}: @${socialUsername.replace('@', '')}`
+    setShowSocialInput(null)
+    setSocialUsername('')
+    setShared(prev => ({ ...prev, [platform]: true }))
+    const messageRef = push(ref(database, `messages/${chatId}`))
+    await set(messageRef, {
+      senderId: userId,
+      text: message,
+      timestamp: Date.now()
+    })
   }
+
+  const handleStop = async () => {
+    if (chatId) {
+      await set(ref(database, `chats/${chatId}/isActive`), false)
+    }
+    router.push('/')
+  }
+
+  const handleNext = useCallback(async () => {
+    if (nextButtonDisabled) return
+    setNextButtonDisabled(true)
+    setTimeout(() => setNextButtonDisabled(false), CHAT_LIMITS.NEXT_BUTTON_COOLDOWN_MS)
+    if (chatId) {
+      await set(ref(database, `chats/${chatId}/isActive`), false)
+    }
+    router.push('/?autoMatch=true')
+  }, [chatId, nextButtonDisabled, router])
+
+  const handleExtendSession = () => {
+    if (sessionExtended) return
+    setSessionStartTime(Date.now() - (CHAT_LIMITS.SESSION_DURATION_MS - 5 * 60 * 1000))
+    setSessionExtended(true)
+  }
+
+  const handleFindNew = () => {
+    router.push('/?autoMatch=true')
+  }
+
+  const isTimeWarning = timeRemaining <= CHAT_LIMITS.WARNING_THRESHOLD_MS && timeRemaining > 0
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-secondary overflow-hidden relative">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#0a0a0f', overflow: 'hidden' }}>
       
       {/* Header */}
-      <header className="flex-none h-16 px-4 md:px-8 border-b border-white/10 flex justify-between items-center bg-black/20 backdrop-blur-md z-20">
-         <div className="flex items-center gap-3">
+      <header style={{ 
+        flexShrink: 0, 
+        height: '56px', 
+        padding: '0 16px', 
+        borderBottom: '1px solid rgba(255,255,255,0.08)', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        backgroundColor: 'rgba(18, 18, 26, 0.9)',
+        backdropFilter: 'blur(12px)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button 
+            onClick={handleStop}
+            style={{ 
+              padding: '8px', 
+              borderRadius: '50%', 
+              background: 'none', 
+              border: 'none', 
+              cursor: 'pointer',
+              color: '#71717a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div style={{ 
+            width: '10px', 
+            height: '10px', 
+            borderRadius: '50%', 
+            backgroundColor: partnerOnline ? '#10b981' : '#ef4444',
+            boxShadow: partnerOnline ? '0 0 8px rgba(16, 185, 129, 0.5)' : 'none'
+          }} />
+          <span style={{ fontWeight: 500, color: '#ffffff' }}>
+            {partnerOnline ? 'MUJian Online' : 'Disconnected'}
+          </span>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px', 
+            fontSize: '12px', 
+            padding: '6px 12px', 
+            borderRadius: '20px',
+            backgroundColor: isTimeWarning ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.05)',
+            color: isTimeWarning ? '#ef4444' : '#71717a'
+          }}>
+            <Clock size={12} />
+            <span style={{ fontFamily: 'monospace' }}>{formatTimeRemaining(timeRemaining)}</span>
+          </div>
+          
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px', 
+            fontSize: '12px', 
+            padding: '6px 12px', 
+            borderRadius: '20px',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            color: '#71717a'
+          }}>
+            <Users size={12} />
+            <span>{onlineCount}</span>
+          </div>
+          
+          {!shared.insta && !chatEnded && (
             <button 
-                onClick={handleLeave}
-                className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+              onClick={() => setShowSocialInput(showSocialInput === 'insta' ? null : 'insta')}
+              style={{ 
+                padding: '8px', 
+                borderRadius: '50%', 
+                background: showSocialInput === 'insta' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)', 
+                border: 'none', 
+                cursor: 'pointer',
+                color: '#ec4899',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
             >
-                <ArrowLeft size={20} />
+              <Instagram size={18} />
             </button>
-            <div className={`w-2.5 h-2.5 rounded-full ${partnerOnline ? 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`} />
-            <span className="font-bold text-white tracking-wide">
-                {partnerOnline ? 'Anonymous' : 'Partner Left'}
-            </span>
-         </div>
-         <div className="flex items-center gap-3">
-            {/* Online Count */}
-            <div className="flex items-center gap-1.5 text-xs text-white/50 bg-white/5 px-3 py-1.5 rounded-full">
-                <Users size={12} />
-                <span>{onlineCount} online</span>
-            </div>
-            <button className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-pink-500 transition-colors">
-                <Instagram size={20} />
+          )}
+          
+          {!shared.snap && !chatEnded && (
+            <button 
+              onClick={() => setShowSocialInput(showSocialInput === 'snap' ? null : 'snap')}
+              style={{ 
+                padding: '8px', 
+                borderRadius: '50%', 
+                background: showSocialInput === 'snap' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255,255,255,0.05)', 
+                border: 'none', 
+                cursor: 'pointer',
+                color: '#eab308',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Ghost size={18} />
             </button>
-            <button onClick={handleLeave} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-red-500 transition-colors" title="Leave & Find New">
-                <LogOut size={20} />
-            </button>
-         </div>
+          )}
+          
+          <button 
+            onClick={() => setShowReportModal(true)}
+            style={{ 
+              padding: '8px', 
+              borderRadius: '50%', 
+              background: 'rgba(255,255,255,0.05)', 
+              border: 'none', 
+              cursor: 'pointer',
+              color: '#71717a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Flag size={16} />
+          </button>
+          
+          <button 
+            onClick={handleNext}
+            disabled={nextButtonDisabled}
+            style={{ 
+              padding: '6px 12px', 
+              borderRadius: '20px', 
+              background: nextButtonDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(99, 102, 241, 0.2)', 
+              border: 'none', 
+              cursor: nextButtonDisabled ? 'not-allowed' : 'pointer',
+              color: nextButtonDisabled ? '#52525b' : '#818cf8',
+              fontSize: '14px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: nextButtonDisabled ? 0.5 : 1
+            }}
+          >
+            <SkipForward size={14} />
+            Next
+          </button>
+        </div>
       </header>
 
-      {/* Partner Left Banner */}
-      {!partnerOnline && (
-          <div className="flex-none bg-red-500/20 border-b border-red-500/30 p-3 flex items-center justify-center gap-2 text-red-400 text-sm">
-              <AlertCircle size={16} />
-              <span>Your partner has left the chat.</span>
-              <button onClick={handleLeave} className="ml-2 px-3 py-1 bg-red-500 text-white text-xs rounded-full hover:bg-red-600 transition-colors font-medium">
-                  Find New Match
-              </button>
-          </div>
+      {/* Warning Banner */}
+      {showWarning && (
+        <div style={{ 
+          flexShrink: 0, 
+          backgroundColor: 'rgba(234, 179, 8, 0.1)', 
+          borderBottom: '1px solid rgba(234, 179, 8, 0.2)', 
+          padding: '12px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: '8px', 
+          color: '#eab308', 
+          fontSize: '14px' 
+        }}>
+          <AlertTriangle size={16} />
+          <span>{warningMessage}</span>
+        </div>
+      )}
+
+      {/* Time Warning */}
+      {isTimeWarning && !chatEnded && (
+        <div style={{ 
+          flexShrink: 0, 
+          backgroundColor: 'rgba(249, 115, 22, 0.1)', 
+          borderBottom: '1px solid rgba(249, 115, 22, 0.2)', 
+          padding: '12px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: '8px', 
+          color: '#f97316', 
+          fontSize: '14px' 
+        }}>
+          <Clock size={16} />
+          <span>{formatTimeRemaining(timeRemaining)} remaining!</span>
+          {!sessionExtended && (
+            <button 
+              onClick={handleExtendSession}
+              style={{ 
+                marginLeft: '8px', 
+                padding: '4px 12px', 
+                backgroundColor: '#6366f1', 
+                color: '#fff', 
+                fontSize: '12px', 
+                borderRadius: '20px', 
+                border: 'none', 
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              +5 mins
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Social Input */}
+      {showSocialInput && (
+        <div style={{ 
+          flexShrink: 0, 
+          padding: '12px', 
+          borderBottom: '1px solid rgba(255,255,255,0.08)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px',
+          backgroundColor: showSocialInput === 'insta' ? 'rgba(236, 72, 153, 0.05)' : 'rgba(234, 179, 8, 0.05)'
+        }}>
+          {showSocialInput === 'insta' ? (
+            <Instagram size={18} color="#ec4899" />
+          ) : (
+            <Ghost size={18} color="#eab308" />
+          )}
+          <input
+            type="text"
+            value={socialUsername}
+            onChange={(e) => setSocialUsername(e.target.value)}
+            placeholder={`Your ${showSocialInput === 'insta' ? 'Instagram' : 'Snapchat'} username`}
+            onKeyDown={(e) => e.key === 'Enter' && handleShareSocial(showSocialInput)}
+            style={{ 
+              flex: 1, 
+              backgroundColor: 'rgba(0,0,0,0.3)', 
+              border: '1px solid rgba(255,255,255,0.1)', 
+              borderRadius: '8px', 
+              padding: '8px 12px', 
+              fontSize: '14px', 
+              color: '#fff',
+              outline: 'none'
+            }}
+          />
+          <button 
+            onClick={() => handleShareSocial(showSocialInput)}
+            disabled={!socialUsername.trim()}
+            style={{ 
+              padding: '8px', 
+              borderRadius: '8px', 
+              backgroundColor: showSocialInput === 'insta' ? '#ec4899' : '#eab308', 
+              border: 'none', 
+              cursor: socialUsername.trim() ? 'pointer' : 'not-allowed',
+              color: '#fff',
+              opacity: socialUsername.trim() ? 1 : 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Check size={16} />
+          </button>
+          <button 
+            onClick={() => setShowSocialInput(null)}
+            style={{ 
+              padding: '8px', 
+              borderRadius: '8px', 
+              backgroundColor: 'rgba(255,255,255,0.1)', 
+              border: 'none', 
+              cursor: 'pointer',
+              color: '#71717a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Partner Left */}
+      {(!partnerOnline || chatEnded) && !showFeedbackModal && (
+        <div style={{ 
+          flexShrink: 0, 
+          backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+          borderBottom: '1px solid rgba(239, 68, 68, 0.2)', 
+          padding: '12px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: '8px', 
+          color: '#ef4444', 
+          fontSize: '14px' 
+        }}>
+          <span>MUJian disconnected</span>
+          <button 
+            onClick={handleNext} 
+            style={{ 
+              marginLeft: '8px', 
+              padding: '4px 12px', 
+              backgroundColor: '#6366f1', 
+              color: '#fff', 
+              fontSize: '12px', 
+              borderRadius: '20px', 
+              border: 'none', 
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            Find New
+          </button>
+        </div>
+      )}
+
+      {/* Inactivity Nudge */}
+      {showInactivityNudge && partnerOnline && !chatEnded && (
+        <div style={{ 
+          flexShrink: 0, 
+          backgroundColor: 'rgba(99, 102, 241, 0.1)', 
+          borderBottom: '1px solid rgba(99, 102, 241, 0.2)', 
+          padding: '12px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: '8px', 
+          color: '#818cf8', 
+          fontSize: '14px' 
+        }}>
+          <span>{messages.length === 0 ? "Say hi 👋 to break the ice!" : "Conversation feels quiet. Try something fun!"}</span>
+          <button 
+            onClick={() => setShowInactivityNudge(false)} 
+            style={{ 
+              marginLeft: '8px', 
+              padding: '4px', 
+              background: 'none', 
+              border: 'none', 
+              cursor: 'pointer',
+              color: '#818cf8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
       )}
       
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 flex flex-col pb-28">
-         {messages.length === 0 && (
-             <div className="flex-1 flex flex-col items-center justify-center text-white/30 text-sm">
-                 <p>Say hi! Don't be shy.</p>
-                 <button onClick={() => setShowAi(true)} className="mt-4 text-primary hover:underline text-xs">
-                    Need an icebreaker?
-                 </button>
-             </div>
-         )}
-         
-         {!messages.length && <div className="flex-1" />}
-
-         <div className="space-y-4 pt-4 max-w-3xl mx-auto w-full">
-            {messages.map((msg) => {
-                const isMe = msg.sender_id === currentUserId
-                return (
-                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] px-5 py-3 rounded-2xl text-[15px] break-words leading-relaxed shadow-sm ${
-                            isMe 
-                            ? 'bg-primary text-white rounded-tr-sm shadow-[0_4px_15px_rgba(255,45,85,0.15)]' 
-                            : 'bg-white/10 text-white rounded-tl-sm border border-white/5'
-                        }`}>
-                            {msg.text}
-                        </div>
-                    </div>
-                )
-            })}
-            <div ref={messagesEndRef} />
-         </div>
-      </div>
-
-      {/* Input Area */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-xl border-t border-white/10 p-4 px-4 md:px-8 z-30 pb-6">
-        
-        {/* AI Panel */}
-        {showAi && (
-            <div className="absolute bottom-full left-2 right-2 md:left-4 md:right-4 p-4 bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl mb-2 max-w-3xl mx-auto">
-                <div className="flex justify-between items-center mb-3">
-                    <span className="text-xs font-bold text-primary uppercase tracking-wider">✨ AI Assistant</span>
-                    <button onClick={() => setShowAi(false)} className="text-white/50 hover:text-white p-1">
-                        <X size={16} />
-                    </button>
-                </div>
-                <IceBreakers onSelect={(text) => {
-                    setInputText(text)
-                    setShowAi(false)
-                }} />
-            </div>
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column' }}>
+        {messages.length === 0 && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#52525b', fontSize: '14px' }}>
+            <p>Say hi to your fellow MUJian! 👋</p>
+            <p style={{ fontSize: '12px', marginTop: '8px', color: '#3f3f46' }}>Be respectful. Chats can be reported.</p>
+          </div>
         )}
+        
+        {!messages.length && <div style={{ flex: 1 }} />}
 
-        <form 
-            onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-            className="flex gap-3 items-center max-w-3xl mx-auto"
-        >
-            <button
-                type="button"
-                onClick={() => setShowAi(!showAi)}
-                disabled={!partnerOnline}
-                className={`p-3 rounded-full transition-all ${showAi ? 'bg-primary text-white rotate-12' : 'bg-white/10 text-primary hover:bg-white/20'} disabled:opacity-50`}
-            >
-                <Sparkles size={20} />
-            </button>
-
-            <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={partnerOnline ? "Type a message..." : "Partner left..."}
-                disabled={!partnerOnline}
-                className="flex-1 bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-white/20 disabled:opacity-50"
-            />
+        <div style={{ maxWidth: '640px', margin: '0 auto', width: '100%' }}>
+          {messages.map((msg) => {
+            const isMe = msg.senderId === userId
+            const isInsta = msg.text.includes('📸 My Instagram:')
+            const isSnap = msg.text.includes('👻 My Snapchat:')
+            const isSocial = isInsta || isSnap
             
-            <button 
-                type="submit"
-                disabled={!inputText.trim() || !partnerOnline}
-                className="p-3 bg-primary rounded-full text-white disabled:opacity-50 disabled:scale-95 transition-all hover:bg-pink-600 active:scale-95 shadow-lg shadow-primary/20"
-            >
-                <Send size={20} />
-            </button>
-        </form>
+            let bgStyle: React.CSSProperties = {}
+            if (isSocial) {
+              if (isInsta) {
+                bgStyle = { background: 'linear-gradient(135deg, #a855f7, #ec4899)', color: '#fff' }
+              } else {
+                bgStyle = { background: 'linear-gradient(135deg, #eab308, #f59e0b)', color: '#000' }
+              }
+            } else if (isMe) {
+              bgStyle = { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }
+            } else {
+              bgStyle = { backgroundColor: 'rgba(26, 26, 37, 0.8)', color: '#e4e4e7', border: '1px solid rgba(255,255,255,0.08)' }
+            }
+            
+            return (
+              <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
+                <div style={{ 
+                  maxWidth: '80%', 
+                  padding: '10px 16px', 
+                  borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', 
+                  fontSize: '15px',
+                  lineHeight: 1.5,
+                  wordBreak: 'break-word',
+                  ...bgStyle
+                }}>
+                  {msg.text}
+                </div>
+              </div>
+            )
+          })}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
+
+      {/* Input */}
+      <div style={{ 
+        flexShrink: 0, 
+        backgroundColor: 'rgba(18, 18, 26, 0.9)', 
+        backdropFilter: 'blur(12px)',
+        borderTop: '1px solid rgba(255,255,255,0.08)', 
+        padding: '12px 16px 24px' 
+      }}>
+        <form 
+          onSubmit={(e) => { e.preventDefault(); handleSend(); }}
+          style={{ display: 'flex', gap: '8px', alignItems: 'center', maxWidth: '640px', margin: '0 auto' }}
+        >
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={partnerOnline && !chatEnded ? "Type a message..." : "Chat ended..."}
+            disabled={!partnerOnline || chatEnded}
+            style={{ 
+              flex: 1, 
+              backgroundColor: 'rgba(255,255,255,0.05)', 
+              border: '1px solid rgba(255,255,255,0.1)', 
+              borderRadius: '24px', 
+              padding: '12px 20px', 
+              fontSize: '15px',
+              color: '#fff',
+              outline: 'none',
+              opacity: (!partnerOnline || chatEnded) ? 0.5 : 1
+            }}
+          />
+          <button 
+            type="submit"
+            disabled={!inputText.trim() || !partnerOnline || chatEnded}
+            style={{ 
+              padding: '12px', 
+              borderRadius: '50%', 
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', 
+              border: 'none', 
+              cursor: (!inputText.trim() || !partnerOnline || chatEnded) ? 'not-allowed' : 'pointer',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: (!inputText.trim() || !partnerOnline || chatEnded) ? 0.5 : 1,
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)'
+            }}
+          >
+            <Send size={20} />
+          </button>
+        </form>
+        
+        <div style={{ textAlign: 'center', marginTop: '8px' }}>
+          <span style={{ fontSize: '12px', color: '#3f3f46' }}>
+            {messageCount}/{CHAT_LIMITS.MAX_MESSAGES_PER_SESSION} messages
+          </span>
+        </div>
+      </div>
+
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        chatId={chatId}
+        reporterId={userId || ''}
+        reportedUserId={partnerId || ''}
+        messages={messages}
+      />
+
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        chatId={chatId}
+        userId={userId || ''}
+        onFindNew={handleFindNew}
+      />
     </div>
   )
 }

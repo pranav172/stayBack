@@ -1,22 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#0a0a0f",
 }
 
 export const metadata: Metadata = {
-  title: "Stayback - Your college. No names. Real talks.",
-  description: "One-tap anonymous chat that disappears forever.",
+  title: "mujAnon - Anonymous Chat for MUJians",
+  description: "One-tap anonymous chat for Manipal University Jaipur students. No names, real talks.",
+  keywords: ["MUJ", "Manipal", "anonymous", "chat", "college"],
 };
 
 export default function RootLayout({
@@ -26,9 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${inter.variable} antialiased bg-secondary text-white`}
-      >
+      <body className="antialiased">
         {children}
       </body>
     </html>
