@@ -1,6 +1,7 @@
 'use client'
 
 import { MatchButton } from '@/components/home/match-button'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Suspense } from 'react'
 
 export default function LandingPage() {
@@ -8,7 +9,7 @@ export default function LandingPage() {
     <div style={{ 
       minHeight: '100vh',
       height: '100vh',
-      backgroundColor: '#0a0a0f', 
+      backgroundColor: 'var(--bg-primary)', 
       position: 'relative', 
       overflow: 'hidden',
       display: 'flex',
@@ -18,7 +19,7 @@ export default function LandingPage() {
       <div style={{
         position: 'fixed',
         inset: 0,
-        background: 'linear-gradient(135deg, #0a0a0f 0%, #0f0f18 50%, #0a0a0f 100%)',
+        background: 'linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%)',
         zIndex: 0
       }}>
         <div style={{
@@ -47,20 +48,23 @@ export default function LandingPage() {
               💬
             </div>
             <span style={{ fontWeight: 600, fontSize: '16px' }}>
-              <span style={{ color: 'rgba(255,255,255,0.9)' }}>muj</span>
+              <span style={{ color: 'var(--text-primary)', opacity: 0.9 }}>muj</span>
               <span style={{ color: '#818cf8' }}>Anon</span>
             </span>
           </div>
-          <span style={{ 
-            fontSize: '11px', 
-            color: '#52525b', 
-            border: '1px solid rgba(255,255,255,0.1)', 
-            padding: '4px 10px', 
-            borderRadius: '16px',
-            backgroundColor: 'rgba(255,255,255,0.03)'
-          }}>
-            Beta
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ThemeToggle />
+            <span style={{ 
+              fontSize: '11px', 
+              color: 'var(--text-muted)', 
+              border: '1px solid var(--border-color)', 
+              padding: '4px 10px', 
+              borderRadius: '16px',
+              backgroundColor: 'rgba(255,255,255,0.03)'
+            }}>
+              Beta
+            </span>
+          </div>
         </header>
 
         {/* Main - fills remaining space */}

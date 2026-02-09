@@ -3,8 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { database } from '@/lib/firebase'
-import { ref, onValue, query, orderByChild, update, get } from 'firebase/database'
-import { Flag, ArrowLeft, AlertTriangle, Clock, Ban, MessageCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { ref, onValue, query, orderByChild, update, set } from 'firebase/database'
+import { Flag, ArrowLeft, MessageCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 interface Message {
@@ -58,7 +58,7 @@ function ReportsPageInner() {
     return () => unsubReports()
   }, [searchParams])
 
-  const handleAction = async (reportId: string, action: 'dismiss' | 'warn' | 'ban_1h' | 'ban_24h' | 'ban_7d' | 'ban_permanent') => {
+  const handleAction = async (reportId: string, action: 'dismiss' | 'warn' | 'shadowban' | 'ban_1h' | 'ban_24h' | 'ban_7d' | 'ban_permanent') => {
     setActionLoading(reportId)
     
     try {
@@ -73,7 +73,18 @@ function ReportsPageInner() {
       })
 
       // If banning, update the device ban
-      if (action !== 'dismiss' && action !== 'warn') {
+      if (action === 'shadowban') {
+        // Apply shadowban to the device
+        if (report.deviceId) {
+          await set(ref(database, `shadowbans/${report.deviceId}`), {
+            deviceId: report.deviceId,
+            odUserId: report.reportedUserId,
+            reason: report.reason,
+            shadowbannedAt: Date.now(),
+            reportId
+          })
+        }
+      } else if (action !== 'dismiss' && action !== 'warn') {
         const banDurations: Record<string, number> = {
           'ban_1h': 60 * 60 * 1000,
           'ban_24h': 24 * 60 * 60 * 1000,
@@ -259,7 +270,7 @@ function ReportsPageInner() {
                   {report.additionalInfo && (
                     <div style={{ marginBottom: '16px' }}>
                       <p style={{ color: '#71717a', fontSize: '12px', marginBottom: '4px' }}>Additional Details:</p>
-                      <p style={{ color: '#a1a1aa', fontSize: '14px', fontStyle: 'italic' }}>"{report.additionalInfo}"</p>
+                      <p style={{ color: '#a1a1aa', fontSize: '14px', fontStyle: 'italic' }}>&quot;{report.additionalInfo}&quot;</p>
                     </div>
                   )}
 
@@ -322,6 +333,12 @@ function ReportsPageInner() {
                         loading={actionLoading === report.id}
                         color="#eab308"
                         label="⚠️ Warn"
+                      />
+                      <ActionButton
+                        onClick={() => handleAction(report.id, 'shadowban')}
+                        loading={actionLoading === report.id}
+                        color="#8b5cf6"
+                        label="👻 Shadowban"
                       />
                       <ActionButton
                         onClick={() => handleAction(report.id, 'ban_1h')}

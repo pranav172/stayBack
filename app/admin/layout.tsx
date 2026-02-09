@@ -3,6 +3,7 @@
 import { useState, useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, Lock, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -172,7 +173,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </form>
 
           <p style={{ color: '#3f3f46', fontSize: '12px', textAlign: 'center', marginTop: '24px' }}>
-            <a href="/" style={{ color: '#52525b' }}>← Back to mujAnon</a>
+            <Link href="/" style={{ color: '#52525b' }}>← Back to mujAnon</Link>
           </p>
         </div>
       </div>

@@ -3,14 +3,23 @@
 import { useState, useEffect } from 'react'
 import { database } from '@/lib/firebase'
 import { ref, onValue, query, orderByChild, limitToLast } from 'firebase/database'
-import { Users, MessageCircle, Flag, ShieldX, Activity, Clock } from 'lucide-react'
+import { Users, MessageCircle, Flag, Activity, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 interface Stats {
   activeConnections: number
+  staleConnections: number
   queueLength: number
   activeChats: number
   pendingReports: number
+}
+
+interface ConnectionInfo {
+  id: string
+  userId: string
+  connectedAt: number
+  lastSeen: number
+  isStale: boolean
 }
 
 interface Report {
@@ -27,21 +36,48 @@ interface Report {
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({
     activeConnections: 0,
+    staleConnections: 0,
     queueLength: 0,
     activeChats: 0,
     pendingReports: 0
   })
+  const [connections, setConnections] = useState<ConnectionInfo[]>([])
   const [recentReports, setRecentReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Listen to connections count
+    // Listen to connections count with stale detection
     const connectionsRef = ref(database, 'connections')
     const unsubConnections = onValue(connectionsRef, (snapshot) => {
-      setStats(prev => ({
-        ...prev,
-        activeConnections: snapshot.exists() ? Object.keys(snapshot.val()).length : 0
-      }))
+      if (snapshot.exists()) {
+        const data = snapshot.val()
+        const now = Date.now()
+        const STALE_THRESHOLD = 30000 // 30 seconds
+        
+        const connectionList: ConnectionInfo[] = Object.entries(data).map(([id, conn]: [string, unknown]) => {
+          const c = conn as { odUserId?: string; connectedAt?: number; lastSeen?: number }
+          const lastSeen = c.lastSeen || c.connectedAt || now
+          return {
+            id,
+            userId: c.odUserId || 'unknown',
+            connectedAt: c.connectedAt || now,
+            lastSeen,
+            isStale: now - lastSeen > STALE_THRESHOLD
+          }
+        })
+        
+        const staleCount = connectionList.filter(c => c.isStale).length
+        
+        setConnections(connectionList)
+        setStats(prev => ({
+          ...prev,
+          activeConnections: connectionList.length,
+          staleConnections: staleCount
+        }))
+      } else {
+        setConnections([])
+        setStats(prev => ({ ...prev, activeConnections: 0, staleConnections: 0 }))
+      }
     })
 
     // Listen to queue count
@@ -58,7 +94,7 @@ export default function AdminDashboard() {
     const unsubChats = onValue(chatsRef, (snapshot) => {
       if (snapshot.exists()) {
         const chats = snapshot.val()
-        const activeCount = Object.values(chats).filter((c: any) => c.isActive).length
+        const activeCount = Object.values(chats as Record<string, { isActive: boolean }>).filter((c) => c.isActive).length
         setStats(prev => ({ ...prev, activeChats: activeCount }))
       } else {
         setStats(prev => ({ ...prev, activeChats: 0 }))
@@ -102,6 +138,15 @@ export default function AdminDashboard() {
     if (hours > 0) return `${hours}h ago`
     if (minutes > 0) return `${minutes}m ago`
     return 'Just now'
+  }
+
+  // Cleanup all connections (for fixing stale count)
+  const cleanupAllConnections = async () => {
+    if (confirm('This will remove ALL connections. Users will need to refresh. Continue?')) {
+      const connectionsRef = ref(database, 'connections')
+      await remove(connectionsRef)
+      alert('All connections cleared. Online count should be 0.')
+    }
   }
 
   const getReasonIcon = (reason: string) => {
@@ -162,6 +207,15 @@ export default function AdminDashboard() {
           color="#ef4444"
           highlight={stats.pendingReports > 0}
         />
+        {stats.staleConnections > 0 && (
+          <StatCard
+            icon={<Activity size={24} />}
+            label="Stale Connections"
+            value={stats.staleConnections}
+            color="#f97316"
+            highlight={true}
+          />
+        )}
       </div>
 
       {/* Recent Reports */}

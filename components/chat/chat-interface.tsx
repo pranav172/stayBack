@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { database, auth } from '@/lib/firebase'
-import { ref, push, set, onValue, remove, serverTimestamp } from 'firebase/database'
+import { ref, push, set, onValue, update, remove, onDisconnect } from 'firebase/database'
 import { onAuthStateChanged } from 'firebase/auth'
 import { Send, Instagram, ArrowLeft, Users, Check, X, Ghost, Flag, SkipForward, Clock, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { moderateMessage, getWarningMessage, CHAT_LIMITS, formatTimeRemaining } from '@/lib/moderation'
 import ReportModal from './report-modal'
 import FeedbackModal from './feedback-modal'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 interface Message {
   id: string
@@ -41,11 +42,14 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const [showInactivityNudge, setShowInactivityNudge] = useState(false)
   const [nextButtonDisabled, setNextButtonDisabled] = useState(false)
   const [sessionExtended, setSessionExtended] = useState(false)
+  const [partnerTyping, setPartnerTyping] = useState(false)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const sessionId = useRef<string>('')
   const partnerSessionRef = useRef<string | null>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTypingUpdateRef = useRef<number>(0)
 
   useEffect(() => {
     let sid = sessionStorage.getItem('stayback_session_id')
@@ -170,6 +174,54 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
     }
   }, [showWarning])
 
+  // Typing indicator functions
+  const updateTypingStatus = useCallback((isTyping: boolean) => {
+    if (!userId || chatEnded) return
+    const now = Date.now()
+    
+    // Debounce: only update if 500ms has passed since last update
+    if (now - lastTypingUpdateRef.current < 500 && isTyping) return
+    lastTypingUpdateRef.current = now
+    
+    const typingRef = ref(database, `chats/${chatId}/typing/${userId}`)
+    
+    if (isTyping) {
+      update(ref(database, `chats/${chatId}/typing`), { [userId]: true })
+      onDisconnect(typingRef).remove()
+      
+      // Clear typing after 3 seconds of no typing
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => {
+        remove(typingRef)
+      }, 3000)
+    } else {
+      remove(typingRef)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    }
+  }, [userId, chatId, chatEnded])
+
+  // Listen for partner's typing status
+  useEffect(() => {
+    if (!partnerId) return
+    
+    const typingRef = ref(database, `chats/${chatId}/typing/${partnerId}`)
+    const unsubTyping = onValue(typingRef, (snapshot) => {
+      setPartnerTyping(snapshot.exists() && snapshot.val() === true)
+    })
+    
+    return () => unsubTyping()
+  }, [chatId, partnerId])
+
+  // Handle input changes with typing detection
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputText(e.target.value)
+    if (e.target.value.trim()) {
+      updateTypingStatus(true)
+    } else {
+      updateTypingStatus(false)
+    }
+  }
+
   const handleSend = async () => {
     if (!inputText.trim() || !userId || chatEnded) return
     const now = Date.now()
@@ -194,6 +246,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
     setLastMessageTime(now)
     const textPayload = inputText
     setInputText('')
+    updateTypingStatus(false) // Clear typing status when sending
     const messageRef = push(ref(database, `messages/${chatId}`))
     await set(messageRef, {
       senderId: userId,
@@ -248,7 +301,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const isTimeWarning = timeRemaining <= CHAT_LIMITS.WARNING_THRESHOLD_MS && timeRemaining > 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: '#0a0a0f', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: 'var(--bg-primary)', overflow: 'hidden' }}>
       
       {/* Header */}
       <header style={{ 
@@ -319,6 +372,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             <Users size={12} />
             <span>{onlineCount}</span>
           </div>
+          
+          <ThemeToggle />
           
           {!shared.insta && !chatEnded && (
             <button 
@@ -640,6 +695,29 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               </div>
             )
           })}
+          
+          {/* Typing indicator */}
+          {partnerTyping && partnerOnline && !chatEnded && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', marginBottom: '4px' }}>
+              <div style={{
+                padding: '10px 16px',
+                borderRadius: '16px 16px 16px 4px',
+                backgroundColor: 'rgba(26, 26, 37, 0.8)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span style={{ color: '#71717a', fontSize: '14px' }}>typing</span>
+                <span style={{ display: 'flex', gap: '3px' }}>
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#71717a', animation: 'typingBounce 1.2s ease-in-out infinite' }} />
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#71717a', animation: 'typingBounce 1.2s ease-in-out 0.2s infinite' }} />
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#71717a', animation: 'typingBounce 1.2s ease-in-out 0.4s infinite' }} />
+                </span>
+              </div>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -659,7 +737,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
           <input
             type="text"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={handleInputChange}
             placeholder={partnerOnline && !chatEnded ? "Type a message..." : "Chat ended..."}
             disabled={!partnerOnline || chatEnded}
             style={{ 

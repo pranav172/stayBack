@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ThemeProvider } from "@/lib/theme";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -13,6 +14,15 @@ export const metadata: Metadata = {
   title: "mujAnon - Anonymous Chat for MUJians",
   description: "One-tap anonymous chat for Manipal University Jaipur students. No names, real talks.",
   keywords: ["MUJ", "Manipal", "anonymous", "chat", "college"],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "mujAnon",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
@@ -21,9 +31,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

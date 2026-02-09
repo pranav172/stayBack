@@ -5,7 +5,7 @@ import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import { database, auth } from './firebase'
 import { ref, get, set, serverTimestamp } from 'firebase/database'
 
-let fpPromise: Promise<any> | null = null
+let fpPromise: ReturnType<typeof FingerprintJS.load> | null = null
 let cachedVisitorId: string | null = null
 
 /**

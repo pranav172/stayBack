@@ -5,7 +5,11 @@ import { database, auth } from '@/lib/firebase'
 import { ref, push, set, get, remove, onValue, onDisconnect, serverTimestamp } from 'firebase/database'
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2, Zap, Square, Users, ArrowLeft, Settings2, ChevronRight } from 'lucide-react'
+import { Loader2, Zap, Square, Users, ArrowLeft, ChevronRight, ShieldCheck, BadgeCheck } from 'lucide-react'
+import { checkShadowban } from '@/lib/shadowban'
+import { checkVerificationStatus } from '@/lib/email-verification'
+import { track, EVENTS, initAnalytics, identifyUser } from '@/lib/analytics'
+import Link from 'next/link'
 
 const ICEBREAKERS = [
   "What's the best chai spot on campus?",
@@ -40,11 +44,26 @@ function MatchButtonInner() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [icebreaker, setIcebreaker] = useState(ICEBREAKERS[0])
   const [waitTime, setWaitTime] = useState(0)
+  const [verifiedOnly, setVerifiedOnly] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
+  const [isShadowbanned, setIsShadowbanned] = useState(false)
   
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const queueRef = useRef<string | null>(null)
   const connectionRef = useRef<string | null>(null)
-  const sessionId = useRef<string>(crypto.randomUUID())
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Use sessionStorage so sessionId survives page refreshes/HMR
+  const getSessionId = () => {
+    if (typeof window === 'undefined') return crypto.randomUUID()
+    let sid = sessionStorage.getItem('mujanon_session_id')
+    if (!sid) {
+      sid = crypto.randomUUID()
+      sessionStorage.setItem('mujanon_session_id', sid)
+    }
+    return sid
+  }
+  const sessionId = useRef<string>(getSessionId())
 
   useEffect(() => {
     if (status === 'searching') {
@@ -59,11 +78,23 @@ function MatchButtonInner() {
   }, [status])
 
   useEffect(() => {
+    initAnalytics()
     signInAnonymously(auth).catch(console.error)
     
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid)
+        identifyUser(user.uid)
+        track(EVENTS.SESSION_STARTED)
+        
+        // Check verification status
+        const verificationStatus = await checkVerificationStatus(user.uid)
+        setIsVerified(verificationStatus.isVerified)
+        
+        // Check shadowban status
+        const shadowbanStatus = await checkShadowban()
+        setIsShadowbanned(shadowbanStatus.isShadowbanned)
+        
         const connectedRef = ref(database, '.info/connected')
         onValue(connectedRef, (snap) => {
           if (snap.val() === true) {
@@ -71,6 +102,13 @@ function MatchButtonInner() {
             onDisconnect(myConnectionRef).remove()
             set(myConnectionRef, { odUserId: user.uid, connectedAt: serverTimestamp(), lastSeen: serverTimestamp() })
             connectionRef.current = sessionId.current
+            
+            // Heartbeat: update lastSeen every 15 seconds
+            if (heartbeatRef.current) clearInterval(heartbeatRef.current)
+            heartbeatRef.current = setInterval(() => {
+              set(ref(database, `connections/${sessionId.current}/lastSeen`), serverTimestamp())
+            }, 15000)
+            
             if (searchParams.get('autoMatch') === 'true') {
               setStep('matching')
               setTimeout(() => handleMatch(), 500)
@@ -95,6 +133,7 @@ function MatchButtonInner() {
       unsubConnections()
       window.removeEventListener('beforeunload', handleBeforeUnload)
       if (unsubscribeRef.current) unsubscribeRef.current()
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current)
       if (connectionRef.current) remove(ref(database, `connections/${connectionRef.current}`))
     }
   }, [searchParams])
@@ -114,12 +153,19 @@ function MatchButtonInner() {
     if (!userId || loading || !connectionRef.current) return
     setLoading(true)
     
+    // Shadowbanned users see fake searching state - never actually match
+    if (isShadowbanned) {
+      setStatus('searching')
+      setLoading(false)
+      return
+    }
+    
     try {
       // Check if user already has an active chat using userChats index
       const userChatsSnapshot = await get(ref(database, `userChats/${userId}`))
       if (userChatsSnapshot.exists()) {
         const userChats = userChatsSnapshot.val()
-        for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, any>)) {
+        for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, { isActive: boolean; sessionId: string }>)) {
           if (chatInfo.isActive && chatInfo.sessionId === sessionId.current) {
             setStatus('matched'); setLoading(false); router.push(`/chat/${chatId}`); return
           }
@@ -179,7 +225,7 @@ function MatchButtonInner() {
       const unsubscribe = onValue(ref(database, `userChats/${userId}`), (snapshot) => {
         if (snapshot.exists()) {
           const userChats = snapshot.val()
-          for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, any>)) {
+          for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, { isActive: boolean; sessionId: string }>)) {
             if (chatInfo.isActive && chatInfo.sessionId === sessionId.current) {
               setStatus('matched')
               if (queueRef.current) { remove(ref(database, `queue/${queueRef.current}`)); queueRef.current = null }
@@ -191,7 +237,7 @@ function MatchButtonInner() {
       })
       unsubscribeRef.current = unsubscribe
     } catch (e) { console.error(e); setLoading(false) }
-  }, [userId, loading, router, selectedMode, selectedTags])
+  }, [userId, loading, router, selectedMode, selectedTags, isShadowbanned])
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag))
@@ -254,7 +300,7 @@ function MatchButtonInner() {
           Continue <ChevronRight size={16} />
         </button>
 
-        {isAlone && <p style={{ color: '#52525b', fontSize: '12px', textAlign: 'center', marginTop: '12px' }}>You're first here. Share the link!</p>}
+        {isAlone && <p style={{ color: '#52525b', fontSize: '12px', textAlign: 'center', marginTop: '12px' }}>You&apos;re first here. Share the link!</p>}
       </div>
     )
   }
@@ -288,6 +334,54 @@ function MatchButtonInner() {
           })}
         </div>
 
+        {/* Verified filter toggle */}
+        <div style={{ 
+          padding: '10px 14px', 
+          backgroundColor: 'rgba(18, 18, 26, 0.8)', 
+          borderRadius: '10px', 
+          border: '1px solid rgba(255,255,255,0.08)',
+          marginBottom: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShieldCheck size={16} style={{ color: isVerified ? '#10b981' : '#71717a' }} />
+            <span style={{ fontSize: '13px', color: '#a1a1aa' }}>Verified MUJ only</span>
+          </div>
+          <button
+            onClick={() => setVerifiedOnly(!verifiedOnly)}
+            style={{
+              width: '40px', height: '22px', borderRadius: '11px',
+              backgroundColor: verifiedOnly ? '#6366f1' : 'rgba(255,255,255,0.1)',
+              border: 'none', cursor: 'pointer', position: 'relative',
+              transition: 'all 0.2s'
+            }}
+          >
+            <div style={{
+              width: '18px', height: '18px', borderRadius: '50%',
+              backgroundColor: '#fff',
+              position: 'absolute', top: '2px',
+              left: verifiedOnly ? '20px' : '2px',
+              transition: 'all 0.2s'
+            }} />
+          </button>
+        </div>
+        
+        {!isVerified && (
+          <Link href="/verify" style={{
+            display: 'block',
+            textAlign: 'center',
+            fontSize: '12px',
+            color: '#818cf8',
+            marginBottom: '14px',
+            textDecoration: 'none'
+          }}>
+            <BadgeCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />
+            Verify your MUJ email to unlock this filter
+          </Link>
+        )}
+
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#a1a1aa', fontSize: '13px', cursor: 'pointer' }}>Skip</button>
           <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(99, 102, 241, 0.25)' }}>Find Match</button>
@@ -315,7 +409,7 @@ function MatchButtonInner() {
       {status === 'searching' && (
         <div style={{ padding: '12px', backgroundColor: 'rgba(18, 18, 26, 0.8)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '16px' }}>
           <p style={{ fontSize: '11px', color: '#52525b', marginBottom: '4px' }}>Topic idea:</p>
-          <p style={{ fontSize: '13px', color: '#a1a1aa', fontStyle: 'italic' }}>"{icebreaker}"</p>
+          <p style={{ fontSize: '13px', color: '#a1a1aa', fontStyle: 'italic' }}>&quot;{icebreaker}&quot;</p>
         </div>
       )}
 

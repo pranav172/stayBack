@@ -86,6 +86,30 @@
     "adminActions": {
       ".read": false,
       ".write": false
+    },
+    
+    "verifiedUsers": {
+      ".read": "auth != null",
+      "$odUserId": {
+        ".write": "auth != null && auth.uid === $odUserId",
+        ".validate": "newData.hasChildren(['email', 'verifiedAt'])"
+      }
+    },
+    
+    "pendingVerifications": {
+      "$odUserId": {
+        ".read": "auth != null && auth.uid === $odUserId",
+        ".write": "auth != null && auth.uid === $odUserId",
+        ".validate": "newData.hasChildren(['email', 'otp', 'expiresAt'])"
+      }
+    },
+    
+    "shadowbans": {
+      ".indexOn": ["deviceId"],
+      "$deviceId": {
+        ".read": "auth != null",
+        ".write": false
+      }
     }
   }
 }

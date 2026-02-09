@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function TermsOfService() {
   return (
     <div style={{
@@ -8,7 +10,7 @@ export default function TermsOfService() {
       fontFamily: 'system-ui, sans-serif'
     }}>
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        <a href="/" style={{ color: '#818cf8', textDecoration: 'none', fontSize: '14px' }}>← Back to mujAnon</a>
+        <Link href="/" style={{ color: '#818cf8', textDecoration: 'none', fontSize: '14px' }}>← Back to mujAnon</Link>
         
         <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#fff', marginTop: '24px', marginBottom: '8px' }}>
           Terms of Service
