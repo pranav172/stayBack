@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
 import { ConnectionProvider } from "@/components/connection-provider";
+import { DebugBanner } from "@/components/debug-banner";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -37,6 +38,7 @@ export default function RootLayout({
         <ThemeProvider>
           <ConnectionProvider>
             {children}
+            <DebugBanner />
           </ConnectionProvider>
         </ThemeProvider>
       </body>
