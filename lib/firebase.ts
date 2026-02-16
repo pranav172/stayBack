@@ -12,6 +12,20 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
+// Fallback for build time if env vars are missing
+if (!firebaseConfig.projectId) {
+  console.warn('⚠️ Firebase config missing. Using mock config for build.');
+  Object.assign(firebaseConfig, {
+    apiKey: 'mock_key',
+    authDomain: 'mock_domain',
+    databaseURL: 'https://mock.firebaseio.com',
+    projectId: 'mock_project',
+    storageBucket: 'mock_bucket',
+    messagingSenderId: 'mock_sender',
+    appId: 'mock_app_id'
+  });
+}
+
 // Initialize Firebase
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 const database = getDatabase(app)
