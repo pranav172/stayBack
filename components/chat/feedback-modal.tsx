@@ -84,7 +84,7 @@ export default function FeedbackModal({
         <div style={{ 
           position: 'absolute', 
           inset: 0, 
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2))',
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(251, 191, 36, 0.2))',
           borderRadius: '24px',
           filter: 'blur(20px)'
         }} />
@@ -154,9 +154,9 @@ export default function FeedbackModal({
                 width: '100%',
                 padding: '16px 24px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
                 border: 'none',
-                color: '#fff',
+                color: '#000',
                 fontWeight: 600,
                 fontSize: '16px',
                 cursor: submitting ? 'not-allowed' : 'pointer',
@@ -165,7 +165,7 @@ export default function FeedbackModal({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)'
+                boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)'
               }}
             >
               {submitting ? (

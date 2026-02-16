@@ -19,9 +19,9 @@ export function OnlineCount() {
   }, [])
   
   return (
-    <div className="flex items-center gap-2 glass px-3 py-1.5 rounded-full">
-        <div className="w-2 h-2 bg-green-500 rounded-full status-online" />
-        <span className="text-xs font-medium text-white/90">
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-surface)', padding: '6px 12px', borderRadius: '9999px', border: '1px solid var(--border-color)' }}>
+        <div style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%', boxShadow: '0 0 8px rgba(16, 185, 129, 0.5)' }} />
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
              {count > 0 ? count : '...'} online
         </span>
     </div>

@@ -136,7 +136,7 @@ export default function DeviceBanCheck({ children }: DeviceBanCheckProps) {
         <div style={{
           width: '32px',
           height: '32px',
-          border: '2px solid #6366f1',
+          border: '2px solid #f59e0b',
           borderTopColor: 'transparent',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'

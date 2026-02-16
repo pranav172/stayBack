@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { database, auth } from '@/lib/firebase'
-import { ref, push, set, onValue, update, remove, onDisconnect } from 'firebase/database'
-import { onAuthStateChanged } from 'firebase/auth'
+import { database } from '@/lib/firebase'
+import { ref, push, set, get, onValue, update, remove, onDisconnect } from 'firebase/database'
 import { Send, Instagram, ArrowLeft, Users, Check, X, Ghost, Flag, SkipForward, Clock, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { moderateMessage, getWarningMessage, CHAT_LIMITS, formatTimeRemaining } from '@/lib/moderation'
 import ReportModal from './report-modal'
 import FeedbackModal from './feedback-modal'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useConnection } from '@/components/connection-provider'
 
 interface Message {
   id: string
@@ -19,14 +19,14 @@ interface Message {
 }
 
 export default function ChatInterface({ chatId, currentUserId }: { chatId: string, currentUserId: string }) {
+  const { userId: connUserId, onlineCount } = useConnection()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [partnerOnline, setPartnerOnline] = useState(true)
-  const [onlineCount, setOnlineCount] = useState(0)
   const [showSocialInput, setShowSocialInput] = useState<'insta' | 'snap' | null>(null)
   const [socialUsername, setSocialUsername] = useState('')
   const [shared, setShared] = useState<{ insta: boolean, snap: boolean }>({ insta: false, snap: false })
-  const [userId, setUserId] = useState<string | null>(currentUserId)
+  const userId = connUserId || currentUserId
   const [chatEnded, setChatEnded] = useState(false)
   const [lastMessageTime, setLastMessageTime] = useState(0)
   
@@ -52,10 +52,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const lastTypingUpdateRef = useRef<number>(0)
 
   useEffect(() => {
-    let sid = sessionStorage.getItem('stayback_session_id')
+    let sid = sessionStorage.getItem('mujanon_session_id')
     if (!sid) {
       sid = crypto.randomUUID()
-      sessionStorage.setItem('stayback_session_id', sid)
+      sessionStorage.setItem('mujanon_session_id', sid)
     }
     sessionId.current = sid
   }, [])
@@ -89,11 +89,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
     return () => clearInterval(checkInactivity)
   }, [lastPartnerMessageTime, messages.length])
 
+  // Listen to messages
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user) setUserId(user.uid)
-    })
-
     const messagesRef = ref(database, `messages/${chatId}`)
     const unsubMessages = onValue(messagesRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -103,9 +100,9 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
           ...data[key]
         })).sort((a, b) => a.timestamp - b.timestamp)
         setMessages(messageList)
-        setMessageCount(messageList.filter(m => m.senderId === userId).length)
+        setMessageCount(messageList.filter(m => m.senderId === currentUserId).length)
         
-        const partnerMessages = messageList.filter(m => m.senderId !== userId)
+        const partnerMessages = messageList.filter(m => m.senderId !== currentUserId)
         if (partnerMessages.length > 0) {
           const lastPartnerMsg = partnerMessages[partnerMessages.length - 1]
           setLastPartnerMessageTime(lastPartnerMsg.timestamp)
@@ -114,54 +111,59 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
       }
     })
 
+    setTimeout(() => scrollToBottom('auto'), 100)
+    return () => unsubMessages()
+  }, [chatId, currentUserId])
+
+  // Listen to chat state and determine partner
+  useEffect(() => {
     const chatRef = ref(database, `chats/${chatId}`)
-    const unsubChat = onValue(chatRef, async (snapshot) => {
+    const unsubChat = onValue(chatRef, (snapshot) => {
       if (snapshot.exists()) {
         const chat = snapshot.val()
-        if (chat.user1 === currentUserId) {
-          setPartnerId(chat.user2)
-        } else {
-          setPartnerId(chat.user1)
-        }
+        console.log('[Chat] State update:', { isActive: chat.isActive, user1: chat.user1, user2: chat.user2, currentUserId })
         if (!chat.isActive) {
           setChatEnded(true)
           setPartnerOnline(false)
           setShowFeedbackModal(true)
+          // Mark userChats as inactive for BOTH users so stale entries don't cause redirects
+          set(ref(database, `userChats/${chat.user1}/${chatId}/isActive`), false).catch(() => {})
+          set(ref(database, `userChats/${chat.user2}/${chatId}/isActive`), false).catch(() => {})
           return
         }
+        // Determine partner's user ID
+        const partnerUid = chat.user1 === currentUserId ? chat.user2 : chat.user1
+        console.log('[Chat] Partner UID:', partnerUid)
+        setPartnerId(partnerUid)
+        
+        // Store session refs for matching logic
         const mySession = sessionId.current
         if (chat.session1 === mySession) {
           partnerSessionRef.current = chat.session2
         } else if (chat.session2 === mySession) {
           partnerSessionRef.current = chat.session1
         }
-        if (partnerSessionRef.current) {
-          const partnerConnRef = ref(database, `connections/${partnerSessionRef.current}`)
-          onValue(partnerConnRef, (connSnap) => {
-            setPartnerOnline(connSnap.exists())
-          })
-        }
       } else {
+        console.log('[Chat] Chat node does not exist')
         setChatEnded(true)
         setPartnerOnline(false)
       }
     })
 
-    const connectionsRef = ref(database, 'connections')
-    const unsubConnections = onValue(connectionsRef, (snapshot) => {
-      const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0
-      setOnlineCount(count)
+    return () => unsubChat()
+  }, [chatId, currentUserId])
+
+  // Separate effect for partner online status (prevents nested listener leaks)
+  useEffect(() => {
+    if (!partnerId || chatEnded) return
+    console.log('[Chat] Watching partner connection:', `connections/${partnerId}`)
+    const partnerConnRef = ref(database, `connections/${partnerId}`)
+    const unsubPartner = onValue(partnerConnRef, (connSnap) => {
+      console.log('[Chat] Partner connection exists:', connSnap.exists(), connSnap.val())
+      if (!chatEnded) setPartnerOnline(connSnap.exists())
     })
-
-    setTimeout(() => scrollToBottom('auto'), 100)
-
-    return () => {
-      unsubAuth()
-      unsubMessages()
-      unsubChat()
-      unsubConnections()
-    }
-  }, [chatId, currentUserId, userId])
+    return () => unsubPartner()
+  }, [partnerId, chatEnded])
 
   useEffect(() => {
     scrollToBottom()
@@ -271,10 +273,21 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
     })
   }
 
-  const handleStop = async () => {
-    if (chatId) {
-      await set(ref(database, `chats/${chatId}/isActive`), false)
+  const endChat = useCallback(async () => {
+    if (!chatId) return
+    console.log('[Chat] Ending chat', chatId)
+    await set(ref(database, `chats/${chatId}/isActive`), false)
+    // Also update both users' userChats index so stale entries don't persist
+    const chatSnap = await get(ref(database, `chats/${chatId}`))
+    if (chatSnap.exists()) {
+      const chat = chatSnap.val()
+      await set(ref(database, `userChats/${chat.user1}/${chatId}/isActive`), false).catch(() => {})
+      await set(ref(database, `userChats/${chat.user2}/${chatId}/isActive`), false).catch(() => {})
     }
+  }, [chatId])
+
+  const handleStop = async () => {
+    await endChat()
     router.push('/')
   }
 
@@ -282,11 +295,9 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
     if (nextButtonDisabled) return
     setNextButtonDisabled(true)
     setTimeout(() => setNextButtonDisabled(false), CHAT_LIMITS.NEXT_BUTTON_COOLDOWN_MS)
-    if (chatId) {
-      await set(ref(database, `chats/${chatId}/isActive`), false)
-    }
+    await endChat()
     router.push('/?autoMatch=true')
-  }, [chatId, nextButtonDisabled, router])
+  }, [endChat, nextButtonDisabled, router])
 
   const handleExtendSession = () => {
     if (sessionExtended) return
@@ -436,10 +447,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             style={{ 
               padding: '6px 12px', 
               borderRadius: '20px', 
-              background: nextButtonDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(99, 102, 241, 0.2)', 
+              background: nextButtonDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(245, 158, 11, 0.2)', 
               border: 'none', 
               cursor: nextButtonDisabled ? 'not-allowed' : 'pointer',
-              color: nextButtonDisabled ? '#52525b' : '#818cf8',
+              color: nextButtonDisabled ? '#52525b' : '#f59e0b',
               fontSize: '14px',
               fontWeight: 600,
               display: 'flex',
@@ -495,7 +506,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               style={{ 
                 marginLeft: '8px', 
                 padding: '4px 12px', 
-                backgroundColor: '#6366f1', 
+                backgroundColor: '#f59e0b', 
                 color: '#fff', 
                 fontSize: '12px', 
                 borderRadius: '20px', 
@@ -600,7 +611,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             style={{ 
               marginLeft: '8px', 
               padding: '4px 12px', 
-              backgroundColor: '#6366f1', 
+              backgroundColor: '#f59e0b', 
               color: '#fff', 
               fontSize: '12px', 
               borderRadius: '20px', 
@@ -618,14 +629,14 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
       {showInactivityNudge && partnerOnline && !chatEnded && (
         <div style={{ 
           flexShrink: 0, 
-          backgroundColor: 'rgba(99, 102, 241, 0.1)', 
-          borderBottom: '1px solid rgba(99, 102, 241, 0.2)', 
+          backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+          borderBottom: '1px solid rgba(245, 158, 11, 0.2)', 
           padding: '12px', 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center', 
           gap: '8px', 
-          color: '#818cf8', 
+          color: '#f59e0b', 
           fontSize: '14px' 
         }}>
           <span>{messages.length === 0 ? "Say hi 👋 to break the ice!" : "Conversation feels quiet. Try something fun!"}</span>
@@ -637,7 +648,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               background: 'none', 
               border: 'none', 
               cursor: 'pointer',
-              color: '#818cf8',
+              color: '#f59e0b',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -674,7 +685,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
                 bgStyle = { background: 'linear-gradient(135deg, #eab308, #f59e0b)', color: '#000' }
               }
             } else if (isMe) {
-              bgStyle = { background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }
+              bgStyle = { background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: '#000' }
             } else {
               bgStyle = { backgroundColor: 'rgba(26, 26, 37, 0.8)', color: '#e4e4e7', border: '1px solid rgba(255,255,255,0.08)' }
             }
@@ -758,7 +769,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             style={{ 
               padding: '12px', 
               borderRadius: '50%', 
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', 
+              background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', 
               border: 'none', 
               cursor: (!inputText.trim() || !partnerOnline || chatEnded) ? 'not-allowed' : 'pointer',
               color: '#fff',
@@ -766,7 +777,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               alignItems: 'center',
               justifyContent: 'center',
               opacity: (!inputText.trim() || !partnerOnline || chatEnded) ? 0.5 : 1,
-              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)'
+              boxShadow: '0 4px 15px rgba(245, 158, 11, 0.3)'
             }}
           >
             <Send size={20} />

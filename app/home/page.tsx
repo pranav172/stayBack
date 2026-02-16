@@ -3,32 +3,32 @@ import { MatchButton } from '@/components/home/match-button'
 
 export default async function HomePage() {
   return (
-    <div className="min-h-screen bg-secondary text-white flex flex-col p-4 md:p-8 relative overflow-hidden">
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', padding: '16px', position: 'relative', overflow: 'hidden' }}>
         {/* Background Effects */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-primary/15 rounded-full blur-[100px]" />
-            <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-accent/15 rounded-full blur-[100px]" />
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: '33%', left: '25%', width: '256px', height: '256px', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: '50%', filter: 'blur(100px)' }} />
+            <div style={{ position: 'absolute', bottom: '33%', right: '25%', width: '256px', height: '256px', backgroundColor: 'rgba(251, 191, 36, 0.08)', borderRadius: '50%', filter: 'blur(100px)' }} />
         </div>
 
         {/* Header */}
-        <header className="flex justify-between items-center mb-8 z-10">
-            <h1 className="text-xl font-bold tracking-tight gradient-text">mujAnon</h1>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', zIndex: 10 }}>
+            <h1 className="gradient-text" style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.025em' }}>mujAnon</h1>
             <OnlineCount />
         </header>
 
         {/* Main Action */}
-        <main className="flex-1 flex flex-col items-center justify-center z-10">
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-black mb-2">Find Someone</h2>
-                <p className="text-white/50">Anonymous 1-on-1 chat</p>
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+            <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                <h2 style={{ fontSize: '30px', fontWeight: 900, marginBottom: '8px', color: 'var(--text-primary)' }}>Find Someone</h2>
+                <p style={{ color: 'var(--text-muted)' }}>Anonymous 1-on-1 chat</p>
             </div>
             
             <MatchButton />
         </main>
 
         {/* Footer */}
-        <footer className="text-center py-4 z-10">
-            <p className="text-xs text-white/20">Chats disappear when you leave</p>
+        <footer style={{ textAlign: 'center', padding: '16px 0', zIndex: 10 }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', opacity: 0.5 }}>Chats disappear when you leave</p>
         </footer>
     </div>
   )

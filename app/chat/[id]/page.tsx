@@ -2,33 +2,28 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { database, auth } from '@/lib/firebase'
+import { database } from '@/lib/firebase'
 import { ref, get } from 'firebase/database'
-import { onAuthStateChanged } from 'firebase/auth'
+import { useConnection } from '@/components/connection-provider'
 import ChatInterface from '@/components/chat/chat-interface'
 
 export default function ChatPage() {
   const params = useParams()
   const router = useRouter()
   const chatId = params.id as string
-  const [userId, setUserId] = useState<string | null>(null)
+  const { userId } = useConnection()
   const [loading, setLoading] = useState(true)
   const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.push('/')
-        return
-      }
-      
-      setUserId(user.uid)
-      
+    if (!userId) return // Wait for auth from ConnectionProvider
+
+    const checkAuth = async () => {
       // Check if user is part of this chat
       const chatSnapshot = await get(ref(database, `chats/${chatId}`))
       if (chatSnapshot.exists()) {
         const chat = chatSnapshot.val()
-        if (chat.user1 === user.uid || chat.user2 === user.uid) {
+        if (chat.user1 === userId || chat.user2 === userId) {
           setAuthorized(true)
         } else {
           router.push('/')
@@ -36,14 +31,13 @@ export default function ChatPage() {
       } else {
         router.push('/')
       }
-      
       setLoading(false)
-    })
+    }
 
-    return () => unsubAuth()
-  }, [chatId, router])
+    checkAuth()
+  }, [chatId, router, userId])
 
-  if (loading) {
+  if (loading || !userId) {
     return (
       <div className="min-h-screen bg-secondary flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -51,7 +45,7 @@ export default function ChatPage() {
     )
   }
 
-  if (!authorized || !userId) {
+  if (!authorized) {
     return null
   }
 

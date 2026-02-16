@@ -107,7 +107,7 @@ export default function VerifyPage() {
         alignItems: 'center', 
         justifyContent: 'center' 
       }}>
-        <Loader2 className="animate-spin" size={32} color="#6366f1" />
+        <Loader2 className="animate-spin" size={32} color="#f59e0b" />
       </div>
     )
   }
@@ -122,7 +122,7 @@ export default function VerifyPage() {
     }}>
       <div style={{ maxWidth: '400px', margin: '0 auto' }}>
         <Link href="/home" style={{ 
-          color: '#818cf8', 
+          color: '#f59e0b', 
           textDecoration: 'none', 
           fontSize: '14px',
           display: 'flex',
@@ -156,7 +156,7 @@ export default function VerifyPage() {
             <Link href="/home" style={{
               display: 'inline-block',
               padding: '12px 24px',
-              backgroundColor: '#6366f1',
+              backgroundColor: '#f59e0b',
               color: '#fff',
               borderRadius: '8px',
               textDecoration: 'none',
@@ -173,13 +173,13 @@ export default function VerifyPage() {
               width: '64px',
               height: '64px',
               borderRadius: '50%',
-              backgroundColor: 'rgba(99, 102, 241, 0.2)',
+              backgroundColor: 'rgba(245, 158, 11, 0.2)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 24px'
             }}>
-              <Mail size={32} color="#6366f1" />
+              <Mail size={32} color="#f59e0b" />
             </div>
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#fff', marginBottom: '8px', textAlign: 'center' }}>
               Verify Your MUJ Email
@@ -218,7 +218,7 @@ export default function VerifyPage() {
                   width: '100%',
                   padding: '14px',
                   borderRadius: '8px',
-                  backgroundColor: loading || !email ? '#3f3f46' : '#6366f1',
+                  backgroundColor: loading || !email ? '#3f3f46' : '#f59e0b',
                   color: '#fff',
                   fontSize: '16px',
                   fontWeight: 600,
@@ -298,7 +298,7 @@ export default function VerifyPage() {
                   width: '100%',
                   padding: '14px',
                   borderRadius: '8px',
-                  backgroundColor: loading || otp.length !== 6 ? '#3f3f46' : '#6366f1',
+                  backgroundColor: loading || otp.length !== 6 ? '#3f3f46' : '#f59e0b',
                   color: '#fff',
                   fontSize: '16px',
                   fontWeight: 600,
@@ -357,7 +357,7 @@ export default function VerifyPage() {
             <Link href="/home" style={{
               display: 'inline-block',
               padding: '12px 24px',
-              backgroundColor: '#6366f1',
+              backgroundColor: '#f59e0b',
               color: '#fff',
               borderRadius: '8px',
               textDecoration: 'none',

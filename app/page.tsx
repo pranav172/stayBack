@@ -25,7 +25,7 @@ export default function LandingPage() {
         <div style={{
           position: 'absolute',
           inset: 0,
-          background: 'radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.08), transparent), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(139, 92, 246, 0.05), transparent)'
+          background: 'radial-gradient(ellipse 80% 50% at 20% 20%, rgba(245, 158, 11, 0.08), transparent), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(251, 191, 36, 0.05), transparent)'
         }} />
       </div>
       
@@ -39,7 +39,7 @@ export default function LandingPage() {
               width: '32px', 
               height: '32px', 
               borderRadius: '8px', 
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', 
+              background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
@@ -49,7 +49,7 @@ export default function LandingPage() {
             </div>
             <span style={{ fontWeight: 600, fontSize: '16px' }}>
               <span style={{ color: 'var(--text-primary)', opacity: 0.9 }}>muj</span>
-              <span style={{ color: '#818cf8' }}>Anon</span>
+              <span style={{ color: '#f59e0b' }}>Anon</span>
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -60,7 +60,8 @@ export default function LandingPage() {
               border: '1px solid var(--border-color)', 
               padding: '4px 10px', 
               borderRadius: '16px',
-              backgroundColor: 'rgba(255,255,255,0.03)'
+              backgroundColor: 'var(--bg-surface)',
+              opacity: 0.5
             }}>
               Beta
             </span>
@@ -95,15 +96,15 @@ export default function LandingPage() {
                 lineHeight: 1.1,
                 marginBottom: '8px'
               }}>
-                <span style={{ color: '#fff' }}>Chat with </span>
+                <span style={{ color: 'var(--text-primary)' }}>Chat with </span>
                 <span style={{ 
-                  background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text'
                 }}>MUJians</span>
               </h1>
-              <p style={{ color: '#71717a', fontSize: '15px' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
                 Anonymous. Instant. No judgments.
               </p>
             </div>
@@ -114,7 +115,7 @@ export default function LandingPage() {
                 <div style={{ 
                   width: '24px', 
                   height: '24px', 
-                  border: '2px solid #6366f1', 
+                  border: '2px solid #f59e0b', 
                   borderTopColor: 'transparent', 
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite'
@@ -132,10 +133,10 @@ export default function LandingPage() {
                   style={{ 
                     padding: '5px 10px', 
                     fontSize: '12px', 
-                    color: '#52525b', 
-                    backgroundColor: 'rgba(255,255,255,0.03)', 
+                    color: 'var(--text-muted)', 
+                    backgroundColor: 'var(--bg-surface)', 
                     borderRadius: '14px', 
-                    border: '1px solid rgba(255,255,255,0.06)'
+                    border: '1px solid var(--border-color)'
                   }}
                 >
                   {feature}
@@ -147,7 +148,7 @@ export default function LandingPage() {
 
         {/* Footer - compact */}
         <footer style={{ padding: '10px', textAlign: 'center', flexShrink: 0 }}>
-          <p style={{ fontSize: '11px', color: '#3f3f46' }}>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             Manipal University Jaipur • Be respectful
           </p>
         </footer>

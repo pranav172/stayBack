@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
+import { ConnectionProvider } from "@/components/connection-provider";
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0a0a0f",
+  themeColor: "#f59e0b",
 }
 
 export const metadata: Metadata = {
@@ -34,7 +35,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
         <ThemeProvider>
-          {children}
+          <ConnectionProvider>
+            {children}
+          </ConnectionProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
-import { database, auth } from '@/lib/firebase'
+import { database } from '@/lib/firebase'
 import { ref, push, set, get, remove, onValue, onDisconnect, serverTimestamp } from 'firebase/database'
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, Zap, Square, Users, ArrowLeft, ChevronRight, ShieldCheck, BadgeCheck } from 'lucide-react'
 import { checkShadowban } from '@/lib/shadowban'
 import { checkVerificationStatus } from '@/lib/email-verification'
 import { track, EVENTS, initAnalytics, identifyUser } from '@/lib/analytics'
+import { useConnection } from '@/components/connection-provider'
 import Link from 'next/link'
 
 const ICEBREAKERS = [
@@ -34,10 +34,9 @@ const TAGS = ['Engineering', 'Law', 'Business', 'Gaming', 'Music', 'Anime', 'Spo
 function MatchButtonInner() {
   const [status, setStatus] = useState<'idle' | 'searching' | 'matched'>('idle')
   const [loading, setLoading] = useState(false)
-  const [onlineCount, setOnlineCount] = useState(0)
-  const [userId, setUserId] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { userId, onlineCount, isConnected } = useConnection()
   
   const [step, setStep] = useState<MatchStep>('mode')
   const [selectedMode, setSelectedMode] = useState<ChatMode>('random')
@@ -50,10 +49,8 @@ function MatchButtonInner() {
   
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const queueRef = useRef<string | null>(null)
-  const connectionRef = useRef<string | null>(null)
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // Use sessionStorage so sessionId survives page refreshes/HMR
+
+  // Session ID for queue/chat matching only (not for connections)
   const getSessionId = () => {
     if (typeof window === 'undefined') return crypto.randomUUID()
     let sid = sessionStorage.getItem('mujanon_session_id')
@@ -77,66 +74,32 @@ function MatchButtonInner() {
     }
   }, [status])
 
+  // Check verification + shadowban when userId becomes available
   useEffect(() => {
+    if (!userId) return
     initAnalytics()
-    signInAnonymously(auth).catch(console.error)
-    
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserId(user.uid)
-        identifyUser(user.uid)
-        track(EVENTS.SESSION_STARTED)
-        
-        // Check verification status
-        const verificationStatus = await checkVerificationStatus(user.uid)
-        setIsVerified(verificationStatus.isVerified)
-        
-        // Check shadowban status
-        const shadowbanStatus = await checkShadowban()
-        setIsShadowbanned(shadowbanStatus.isShadowbanned)
-        
-        const connectedRef = ref(database, '.info/connected')
-        onValue(connectedRef, (snap) => {
-          if (snap.val() === true) {
-            const myConnectionRef = ref(database, `connections/${sessionId.current}`)
-            onDisconnect(myConnectionRef).remove()
-            set(myConnectionRef, { odUserId: user.uid, connectedAt: serverTimestamp(), lastSeen: serverTimestamp() })
-            connectionRef.current = sessionId.current
-            
-            // Heartbeat: update lastSeen every 15 seconds
-            if (heartbeatRef.current) clearInterval(heartbeatRef.current)
-            heartbeatRef.current = setInterval(() => {
-              set(ref(database, `connections/${sessionId.current}/lastSeen`), serverTimestamp())
-            }, 15000)
-            
-            if (searchParams.get('autoMatch') === 'true') {
-              setStep('matching')
-              setTimeout(() => handleMatch(), 500)
-            }
-          }
-        })
-      }
-    })
+    identifyUser(userId)
+    track(EVENTS.SESSION_STARTED)
 
-    const unsubConnections = onValue(ref(database, 'connections'), (snapshot) => {
-      setOnlineCount(snapshot.exists() ? Object.keys(snapshot.val()).length : 0)
-    })
+    checkVerificationStatus(userId).then(v => setIsVerified(v.isVerified))
+    checkShadowban().then(s => setIsShadowbanned(s.isShadowbanned))
+  }, [userId])
 
-    const handleBeforeUnload = () => {
-      if (connectionRef.current) remove(ref(database, `connections/${connectionRef.current}`))
+  // Auto-match from query param
+  useEffect(() => {
+    if (userId && isConnected && searchParams.get('autoMatch') === 'true') {
+      setStep('matching')
+      setTimeout(() => handleMatch(), 500)
+    }
+  }, [userId, isConnected, searchParams])
+
+  // Clean up queue on unmount (but NOT the connection — that's app-level now)
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) unsubscribeRef.current()
       if (queueRef.current) remove(ref(database, `queue/${queueRef.current}`))
     }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
-    return () => {
-      unsubAuth()
-      unsubConnections()
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      if (unsubscribeRef.current) unsubscribeRef.current()
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current)
-      if (connectionRef.current) remove(ref(database, `connections/${connectionRef.current}`))
-    }
-  }, [searchParams])
+  }, [])
 
   const handleStop = useCallback(async () => {
     if (!userId) return
@@ -150,7 +113,7 @@ function MatchButtonInner() {
   }, [userId])
 
   const handleMatch = useCallback(async () => {
-    if (!userId || loading || !connectionRef.current) return
+    if (!userId || loading || !isConnected) return
     setLoading(true)
     
     // Shadowbanned users see fake searching state - never actually match
@@ -162,12 +125,22 @@ function MatchButtonInner() {
     
     try {
       // Check if user already has an active chat using userChats index
+      // IMPORTANT: validate against actual chat data to avoid stale entries
       const userChatsSnapshot = await get(ref(database, `userChats/${userId}`))
       if (userChatsSnapshot.exists()) {
         const userChats = userChatsSnapshot.val()
         for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, { isActive: boolean; sessionId: string }>)) {
           if (chatInfo.isActive && chatInfo.sessionId === sessionId.current) {
-            setStatus('matched'); setLoading(false); router.push(`/chat/${chatId}`); return
+            // Cross-check: verify the actual chat is still active
+            const chatSnap = await get(ref(database, `chats/${chatId}`))
+            if (chatSnap.exists() && chatSnap.val().isActive) {
+              console.log('[Match] Found active chat, redirecting:', chatId)
+              setStatus('matched'); setLoading(false); router.push(`/chat/${chatId}`); return
+            } else {
+              // Stale entry — clean it up
+              console.log('[Match] Cleaning stale userChat entry:', chatId)
+              await set(ref(database, `userChats/${userId}/${chatId}/isActive`), false).catch(() => {})
+            }
           }
         }
       }
@@ -215,7 +188,7 @@ function MatchButtonInner() {
       const myQueueRef = push(ref(database, 'queue'))
       queueRef.current = myQueueRef.key
       await set(myQueueRef, {
-        userId, sessionId: sessionId.current, connectionId: connectionRef.current,
+        userId, sessionId: sessionId.current, connectionId: userId,
         mode: selectedMode, tags: selectedTags, timestamp: serverTimestamp()
       })
       onDisconnect(myQueueRef).remove()
@@ -237,7 +210,7 @@ function MatchButtonInner() {
       })
       unsubscribeRef.current = unsubscribe
     } catch (e) { console.error(e); setLoading(false) }
-  }, [userId, loading, router, selectedMode, selectedTags, isShadowbanned])
+  }, [userId, loading, router, selectedMode, selectedTags, isShadowbanned, isConnected])
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag))
@@ -255,11 +228,11 @@ function MatchButtonInner() {
           <div style={{ 
             display: 'flex', alignItems: 'center', gap: '8px', 
             padding: '6px 14px', borderRadius: '20px',
-            backgroundColor: 'rgba(18, 18, 26, 0.8)', border: '1px solid rgba(255,255,255,0.08)'
+            backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)'
           }}>
             <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%', boxShadow: '0 0 6px rgba(16, 185, 129, 0.5)' }} />
-            <Users size={12} style={{ color: '#71717a' }} />
-            <span style={{ fontSize: '13px', color: '#a1a1aa' }}>{onlineCount > 0 ? onlineCount : '—'} online</span>
+            <Users size={12} style={{ color: 'var(--text-muted)' }} />
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{onlineCount > 0 ? onlineCount : '—'} online</span>
           </div>
         </div>
 
@@ -273,14 +246,14 @@ function MatchButtonInner() {
                 onClick={() => setSelectedMode(mode.id)}
                 style={{ 
                   flex: 1, padding: '12px 8px', borderRadius: '10px', 
-                  border: sel ? '1px solid rgba(99, 102, 241, 0.5)' : '1px solid rgba(255,255,255,0.08)', 
-                  backgroundColor: sel ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.03)',
+                  border: sel ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--border-color)', 
+                  backgroundColor: sel ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-surface)',
                   cursor: 'pointer', textAlign: 'center',
                   transition: 'all 0.2s'
                 }}
               >
                 <div style={{ fontSize: '20px', marginBottom: '4px' }}>{mode.emoji}</div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: sel ? '#fff' : '#a1a1aa' }}>{mode.title}</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: sel ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{mode.title}</div>
               </button>
             )
           })}
@@ -291,10 +264,10 @@ function MatchButtonInner() {
           onClick={() => setStep('tags')}
           style={{ 
             width: '100%', padding: '12px', borderRadius: '10px', 
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            border: 'none', color: '#fff', fontWeight: 600, fontSize: '14px',
+            background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+            border: 'none', color: '#000', fontWeight: 600, fontSize: '14px',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-            boxShadow: '0 4px 15px rgba(99, 102, 241, 0.25)'
+            boxShadow: '0 4px 15px rgba(245, 158, 11, 0.25)'
           }}
         >
           Continue <ChevronRight size={16} />
@@ -324,9 +297,9 @@ function MatchButtonInner() {
                 key={tag} onClick={() => toggleTag(tag)} disabled={dis}
                 style={{
                   padding: '6px 12px', borderRadius: '16px', fontSize: '12px',
-                  border: sel ? '1px solid rgba(99, 102, 241, 0.5)' : '1px solid rgba(255,255,255,0.1)',
-                  backgroundColor: sel ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.03)',
-                  color: sel ? '#a5b4fc' : dis ? '#3f3f46' : '#71717a',
+                  border: sel ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--border-color)',
+                  backgroundColor: sel ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-surface)',
+                  color: sel ? '#fbbf24' : dis ? 'var(--text-muted)' : 'var(--text-secondary)',
                   cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.5 : 1
                 }}
               >{tag}</button>
@@ -353,7 +326,7 @@ function MatchButtonInner() {
             onClick={() => setVerifiedOnly(!verifiedOnly)}
             style={{
               width: '40px', height: '22px', borderRadius: '11px',
-              backgroundColor: verifiedOnly ? '#6366f1' : 'rgba(255,255,255,0.1)',
+              backgroundColor: verifiedOnly ? '#f59e0b' : 'var(--bg-surface)',
               border: 'none', cursor: 'pointer', position: 'relative',
               transition: 'all 0.2s'
             }}
@@ -373,7 +346,7 @@ function MatchButtonInner() {
             display: 'block',
             textAlign: 'center',
             fontSize: '12px',
-            color: '#818cf8',
+            color: '#f59e0b',
             marginBottom: '14px',
             textDecoration: 'none'
           }}>
@@ -383,8 +356,8 @@ function MatchButtonInner() {
         )}
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#a1a1aa', fontSize: '13px', cursor: 'pointer' }}>Skip</button>
-          <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'none', color: '#fff', fontWeight: 600, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(99, 102, 241, 0.25)' }}>Find Match</button>
+          <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Skip</button>
+          <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', border: 'none', color: '#000', fontWeight: 600, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.25)' }}>Find Match</button>
         </div>
       </div>
     )
@@ -394,22 +367,22 @@ function MatchButtonInner() {
   return (
     <div style={{ width: '100%', maxWidth: '300px', textAlign: 'center' }}>
       {status === 'searching' && (
-        <button onClick={handleStop} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#71717a', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '16px' }}>
+        <button onClick={handleStop} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '16px' }}>
           <ArrowLeft size={14} /> Cancel
         </button>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', backgroundColor: 'rgba(18, 18, 26, 0.8)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
           <div style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%' }} />
-          <span style={{ fontSize: '13px', color: '#a1a1aa' }}>{onlineCount} online</span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{onlineCount} online</span>
         </div>
       </div>
 
       {status === 'searching' && (
-        <div style={{ padding: '12px', backgroundColor: 'rgba(18, 18, 26, 0.8)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '16px' }}>
-          <p style={{ fontSize: '11px', color: '#52525b', marginBottom: '4px' }}>Topic idea:</p>
-          <p style={{ fontSize: '13px', color: '#a1a1aa', fontStyle: 'italic' }}>&quot;{icebreaker}&quot;</p>
+        <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface)', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Topic idea:</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>&quot;{icebreaker}&quot;</p>
         </div>
       )}
 
@@ -418,13 +391,13 @@ function MatchButtonInner() {
         disabled={loading || status === 'matched' || !userId}
         style={{ 
           width: '100%', padding: '14px 24px', borderRadius: '12px', 
-          background: status === 'searching' ? 'rgba(18, 18, 26, 0.8)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          background: status === 'searching' ? 'var(--bg-surface)' : 'linear-gradient(135deg, #f59e0b, #fbbf24)',
           border: status === 'searching' ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
-          color: '#fff', fontWeight: 600, fontSize: '15px',
+          color: status === 'searching' ? 'var(--text-primary)' : '#000', fontWeight: 600, fontSize: '15px',
           cursor: (loading || status === 'matched' || !userId) ? 'not-allowed' : 'pointer',
           opacity: (loading || status === 'matched' || !userId) ? 0.5 : 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          boxShadow: status === 'searching' ? 'none' : '0 4px 20px rgba(99, 102, 241, 0.3)'
+          boxShadow: status === 'searching' ? 'none' : '0 4px 20px rgba(245, 158, 11, 0.3)'
         }}
       >
         {loading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
@@ -434,7 +407,7 @@ function MatchButtonInner() {
       </button>
       
       {status === 'searching' && (
-        <p style={{ color: '#52525b', fontSize: '12px', marginTop: '10px' }}>Searching... {waitTime}s</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '10px' }}>Searching... {waitTime}s</p>
       )}
     </div>
   )
@@ -445,7 +418,7 @@ export function MatchButton() {
   return (
     <Suspense fallback={
       <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
-        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#6366f1' }} />
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#f59e0b' }} />
       </div>
     }>
       <MatchButtonInner />

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { database } from '@/lib/firebase'
-import { ref, onValue, query, orderByChild, limitToLast } from 'firebase/database'
+import { ref, onValue, query, orderByChild, limitToLast, remove } from 'firebase/database'
 import { Users, MessageCircle, Flag, Activity, Clock } from 'lucide-react'
 import Link from 'next/link'
 
@@ -165,7 +165,7 @@ export default function AdminDashboard() {
         <div style={{
           width: '32px',
           height: '32px',
-          border: '2px solid #6366f1',
+          border: '2px solid #f59e0b',
           borderTopColor: 'transparent',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
@@ -239,9 +239,9 @@ export default function AdminDashboard() {
           <Link href="/admin/reports" style={{
             padding: '8px 16px',
             borderRadius: '8px',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)',
-            border: '1px solid rgba(99, 102, 241, 0.3)',
-            color: '#818cf8',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            color: '#f59e0b',
             fontSize: '14px',
             textDecoration: 'none'
           }}>

@@ -6,8 +6,8 @@
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
   --bg-surface: #1a1a25;
-  --accent-primary: #6366f1;
-  --accent-secondary: #8b5cf6;
+  --accent-primary: #f59e0b;
+  --accent-secondary: #fbbf24;
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
@@ -16,11 +16,11 @@
 
 /* Light theme */
 [data-theme="light"] {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --bg-surface: #e2e8f0;
-  --accent-primary: #6366f1;
-  --accent-secondary: #8b5cf6;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-surface: #f3f4f6;
+  --accent-primary: #d97706;
+  --accent-secondary: #f59e0b;
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
@@ -63,8 +63,8 @@ body {
   right: 0;
   bottom: 0;
   background: 
-    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.08), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(139, 92, 246, 0.05), transparent);
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(245, 158, 11, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(251, 191, 36, 0.05), transparent);
   pointer-events: none;
 }
 
@@ -85,7 +85,7 @@ body {
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -93,18 +93,18 @@ body {
 
 /* Primary button */
 .btn-cta {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  color: #000;
   font-weight: 600;
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.25);
 }
 
 .btn-cta:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.35);
 }
 
 .btn-cta:disabled {
@@ -170,7 +170,7 @@ body {
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
   opacity: 0;
   filter: blur(8px);
   transition: opacity 0.3s;
@@ -192,12 +192,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
+  background: rgba(245, 158, 11, 0.3);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.5);
+  background: rgba(245, 158, 11, 0.5);
 }
 
 /* Focus styles */
@@ -206,13 +206,13 @@ input:focus, textarea:focus, button:focus {
 }
 
 input:focus, textarea:focus {
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
 }
 
 /* Selection */
 ::selection {
-  background: rgba(99, 102, 241, 0.3);
+  background: rgba(245, 158, 11, 0.3);
 }
 
 /* Typing indicator animation */

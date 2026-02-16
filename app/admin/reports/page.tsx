@@ -151,7 +151,7 @@ function ReportsPageInner() {
         <div style={{
           width: '32px',
           height: '32px',
-          border: '2px solid #6366f1',
+          border: '2px solid #f59e0b',
           borderTopColor: 'transparent',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
@@ -180,9 +180,9 @@ function ReportsPageInner() {
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
-              backgroundColor: filter === f ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)',
-              border: filter === f ? '1px solid rgba(99, 102, 241, 0.5)' : '1px solid rgba(255,255,255,0.1)',
-              color: filter === f ? '#818cf8' : '#71717a',
+              backgroundColor: filter === f ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.05)',
+              border: filter === f ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.1)',
+              color: filter === f ? '#f59e0b' : '#71717a',
               fontSize: '14px',
               cursor: 'pointer',
               textTransform: 'capitalize'
@@ -408,7 +408,7 @@ export default function ReportsPage() {
   return (
     <Suspense fallback={
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
-        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#6366f1' }} />
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#f59e0b' }} />
       </div>
     }>
       <ReportsPageInner />
