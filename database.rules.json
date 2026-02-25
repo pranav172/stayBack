@@ -1,114 +1,174 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
+
     "connections": {
       ".read": true,
-      ".indexOn": ["connectedAt"],
-      "$sessionId": {
-        ".write": "auth != null && (!data.exists() || data.child('odUserId').val() === auth.uid)",
+      ".indexOn": ["lastSeen", "connectedAt"],
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
         ".validate": "newData.hasChildren(['odUserId', 'connectedAt'])"
       }
     },
-    
+
     "queue": {
       ".read": "auth != null",
-      ".indexOn": ["timestamp", "mode", "userId"],
-      "$pushId": {
-        ".write": "auth != null && (!data.exists() || data.child('userId').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['userId', 'sessionId', 'mode', 'timestamp']) && newData.child('userId').val() === auth.uid"
+      "$queueId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['userId', 'sessionId', 'mode', 'timestamp'])"
       }
     },
-    
+
     "chats": {
       ".read": "auth != null",
-      ".indexOn": ["createdAt", "isActive", "session1", "session2"],
       "$chatId": {
-        ".write": "auth != null && (!data.exists() || data.child('user1').val() === auth.uid || data.child('user2').val() === auth.uid)",
-        ".validate": "newData.hasChildren(['user1', 'user2', 'session1', 'session2', 'createdAt', 'isActive'])"
-      }
-    },
-    
-    "userChats": {
-      "$odUserId": {
-        ".read": "auth != null && auth.uid === $odUserId",
         ".write": "auth != null",
-        "$chatId": {
-          ".validate": "newData.hasChildren(['sessionId', 'isActive'])"
-        }
+        ".validate": "newData.hasChildren(['user1', 'user2', 'session1', 'session2', 'mode', 'createdAt', 'isActive'])",
+        ".indexOn": ["createdAt", "isActive"]
       }
     },
-    
+
     "messages": {
       "$chatId": {
-        ".read": "auth != null && (root.child('chats/' + $chatId + '/user1').val() === auth.uid || root.child('chats/' + $chatId + '/user2').val() === auth.uid)",
-        ".indexOn": ["timestamp"],
+        ".read": "auth != null",
         "$messageId": {
-          ".write": "auth != null && (root.child('chats/' + $chatId + '/user1').val() === auth.uid || root.child('chats/' + $chatId + '/user2').val() === auth.uid) && root.child('chats/' + $chatId + '/isActive').val() === true",
-          ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('text').val().length <= 500 && newData.child('senderId').val() === auth.uid"
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 2000"
         }
       }
     },
-    
-    "devices": {
-      ".indexOn": ["bannedUntil", "lastSeen"],
-      "$deviceId": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['odUserId', 'firstSeen'])"
+
+    "userChats": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null"
       }
     },
-    
+
+    "typing": {
+      "$chatId": {
+        ".read": "auth != null",
+        "$userId": {
+          ".write": "auth != null && auth.uid === $userId"
+        }
+      }
+    },
+
+    "partnerOnline": {
+      "$chatId": {
+        ".read": "auth != null",
+        "$userId": {
+          ".write": "auth != null && auth.uid === $userId"
+        }
+      }
+    },
+
     "reports": {
-      ".read": "auth != null",
-      ".indexOn": ["timestamp", "status"],
+      ".read": false,
       "$reportId": {
         ".write": "auth != null",
-        ".validate": "newData.hasChildren(['reporterId', 'reportedUserId', 'chatId', 'reason', 'timestamp', 'status'])"
+        ".validate": "newData.hasChildren(['reportedBy', 'reportedUser', 'chatId', 'reason', 'timestamp'])"
       }
     },
-    
+
     "feedback": {
+      "$feedbackId": {
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['userId', 'chatId', 'timestamp'])"
+      }
+    },
+
+    "bannedDevices": {
       ".read": false,
-      "$chatId": {
-        "$feedbackId": {
-          ".write": "auth != null && !data.exists()"
+      ".write": false,
+      "$deviceId": {
+        ".read": "auth != null"
+      }
+    },
+
+    "shadowbanned": {
+      ".read": false,
+      ".write": false,
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId"
+      }
+    },
+
+    "shadowbans": {
+      ".read": false,
+      ".write": false,
+      "$deviceId": {
+        ".read": "auth != null"
+      }
+    },
+
+    "verifiedEmails": {
+      ".read": false,
+      ".write": false,
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId"
+      }
+    },
+
+    "verifiedUsers": {
+      ".read": false,
+      ".write": false,
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId"
+      }
+    },
+
+    "confessions": {
+      ".read": true,
+      ".indexOn": ["timestamp", "expiresAt"],
+      "$confessionId": {
+        ".write": "auth != null",
+        ".validate": "!newData.exists() || (newData.hasChild('text') && newData.child('text').isString() && newData.child('text').val().length <= 280)",
+        "hearts": {
+          ".write": true
+        },
+        "comments": {
+          "$commentId": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 200"
+          }
         }
       }
     },
-    
-    "bans": {
-      ".read": "auth != null",
-      ".indexOn": ["odUserId", "deviceId", "expiresAt"],
-      "$odUserId": {
+
+    "groupChats": {
+      ".read": true,
+      ".indexOn": ["createdAt", "isActive"],
+      "$roomId": {
+        ".write": "auth != null",
+        ".validate": "!newData.exists() || newData.hasChildren(['isActive', 'createdAt'])"
+      }
+    },
+
+    "groupMessages": {
+      "$roomId": {
+        ".read": true,
+        "$messageId": {
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 2000"
+        }
+      }
+    },
+
+    "meta": {
+      "onlineCount": {
+        ".read": true,
         ".write": false
       }
     },
-    
-    "adminActions": {
-      ".read": false,
-      ".write": false
-    },
-    
-    "verifiedUsers": {
-      ".read": "auth != null",
-      "$odUserId": {
-        ".write": "auth != null && auth.uid === $odUserId",
-        ".validate": "newData.hasChildren(['email', 'verifiedAt'])"
-      }
-    },
-    
-    "pendingVerifications": {
-      "$odUserId": {
-        ".read": "auth != null && auth.uid === $odUserId",
-        ".write": "auth != null && auth.uid === $odUserId",
-        ".validate": "newData.hasChildren(['email', 'otp', 'expiresAt'])"
-      }
-    },
-    
-    "shadowbans": {
-      ".indexOn": ["deviceId"],
-      "$deviceId": {
-        ".read": "auth != null",
-        ".write": false
+
+    "fcmTokens": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId"
       }
     }
   }

@@ -6,20 +6,22 @@ const OFFENSIVE_KEYWORDS = [
   // Explicit content indicators
   'nudes', 'nude', 'naked', 'sex', 'porn', 'xxx',
   // Harassment terms
-  'kill yourself', 'kys', 'die',
-  // Add more as needed
+  'kill yourself', 'kys', 'die', 'go fuck yourself', 'fuck yourself',
+  // Profanity
+  'fuck', 'shit', 'bitch', 'bastard', 'asshole',
+  // Slurs (add as needed)
 ]
 
 // Patterns to detect and block (prevent doxxing)
 const SENSITIVE_PATTERNS = [
   // Phone numbers (Indian format)
-  /\b[6-9]\d{9}\b/g,
+  /\b[6-9]\d{9}\b/,
   // Phone with country code
-  /\+91[\s-]?\d{10}/g,
+  /\+91[\s-]?\d{10}/,
   // Email addresses
-  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
   // Links (basic URL pattern)
-  /https?:\/\/[^\s]+/gi,
+  /https?:\/\/[^\s]+/i,
 ]
 
 // Allowed social patterns (for sharing feature)

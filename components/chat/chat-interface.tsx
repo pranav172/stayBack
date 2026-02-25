@@ -3,19 +3,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { database } from '@/lib/firebase'
 import { ref, push, set, get, onValue, update, remove, onDisconnect } from 'firebase/database'
-import { Send, Instagram, ArrowLeft, Users, Check, X, Ghost, Flag, SkipForward, Clock, AlertTriangle } from 'lucide-react'
+import { Send, Instagram, ArrowLeft, Users, Check, CheckCheck, X, Ghost, Flag, SkipForward, Clock, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { moderateMessage, getWarningMessage, CHAT_LIMITS, formatTimeRemaining } from '@/lib/moderation'
 import ReportModal from './report-modal'
 import FeedbackModal from './feedback-modal'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useConnection } from '@/components/connection-provider'
+import { playMessageSound, unlockAudio } from '@/lib/sounds'
 
 interface Message {
   id: string
   senderId: string
   text: string
   timestamp: number
+  readAt?: number
 }
 
 export default function ChatInterface({ chatId, currentUserId }: { chatId: string, currentUserId: string }) {
@@ -29,6 +31,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const userId = connUserId || currentUserId
   const [chatEnded, setChatEnded] = useState(false)
   const [lastMessageTime, setLastMessageTime] = useState(0)
+  const [chatMoods, setChatMoods] = useState<{ mood1?: string; mood2?: string; user1?: string } | null>(null)
   
   const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now())
   const [timeRemaining, setTimeRemaining] = useState(CHAT_LIMITS.SESSION_DURATION_MS)
@@ -43,6 +46,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const [nextButtonDisabled, setNextButtonDisabled] = useState(false)
   const [sessionExtended, setSessionExtended] = useState(false)
   const [partnerTyping, setPartnerTyping] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const originalTitle = useRef('mujAnon')
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -92,6 +97,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   // Listen to messages
   useEffect(() => {
     const messagesRef = ref(database, `messages/${chatId}`)
+    let firstLoad = true
     const unsubMessages = onValue(messagesRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val()
@@ -99,6 +105,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
           id: key,
           ...data[key]
         })).sort((a, b) => a.timestamp - b.timestamp)
+
+        const prevCount = messages.length
         setMessages(messageList)
         setMessageCount(messageList.filter(m => m.senderId === currentUserId).length)
         
@@ -107,36 +115,68 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
           const lastPartnerMsg = partnerMessages[partnerMessages.length - 1]
           setLastPartnerMessageTime(lastPartnerMsg.timestamp)
           setShowInactivityNudge(false)
+
+          // Sound + tab badge for new partner messages (not on first load)
+          if (!firstLoad && messageList.length > prevCount) {
+            playMessageSound()
+            if (document.visibilityState !== 'visible') {
+              setUnreadCount(c => c + 1)
+            }
+          }
         }
+        firstLoad = false
       }
     })
 
     setTimeout(() => scrollToBottom('auto'), 100)
     return () => unsubMessages()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, currentUserId])
 
-  // Listen to chat state and determine partner
+  // Tab title badge
+  useEffect(() => {
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) mujAnon`
+    } else {
+      document.title = originalTitle.current
+    }
+  }, [unreadCount])
+
+  // Reset unread count and title when tab is focused
+  useEffect(() => {
+    const handleFocus = () => {
+      setUnreadCount(0)
+      document.title = originalTitle.current
+    }
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [])
+
+  // Unlock audio context on first user interaction
+  useEffect(() => {
+    const unlock = () => { unlockAudio(); document.removeEventListener('click', unlock) }
+    document.addEventListener('click', unlock)
+    return () => document.removeEventListener('click', unlock)
+  }, [])
+
+  // Listen to chat state and determine partner + mood
   useEffect(() => {
     const chatRef = ref(database, `chats/${chatId}`)
     const unsubChat = onValue(chatRef, (snapshot) => {
       if (snapshot.exists()) {
         const chat = snapshot.val()
-        console.log('[Chat] State update:', { isActive: chat.isActive, user1: chat.user1, user2: chat.user2, currentUserId })
         if (!chat.isActive) {
           setChatEnded(true)
           setPartnerOnline(false)
           setShowFeedbackModal(true)
-          // Mark userChats as inactive for BOTH users so stale entries don't cause redirects
           set(ref(database, `userChats/${chat.user1}/${chatId}/isActive`), false).catch(() => {})
           set(ref(database, `userChats/${chat.user2}/${chatId}/isActive`), false).catch(() => {})
           return
         }
-        // Determine partner's user ID
         const partnerUid = chat.user1 === currentUserId ? chat.user2 : chat.user1
-        console.log('[Chat] Partner UID:', partnerUid)
         setPartnerId(partnerUid)
+        setChatMoods({ mood1: chat.mood1, mood2: chat.mood2, user1: chat.user1 })
         
-        // Store session refs for matching logic
         const mySession = sessionId.current
         if (chat.session1 === mySession) {
           partnerSessionRef.current = chat.session2
@@ -144,12 +184,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
           partnerSessionRef.current = chat.session1
         }
       } else {
-        console.log('[Chat] Chat node does not exist')
         setChatEnded(true)
         setPartnerOnline(false)
       }
     })
-
     return () => unsubChat()
   }, [chatId, currentUserId])
 
@@ -248,7 +286,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
     setLastMessageTime(now)
     const textPayload = inputText
     setInputText('')
-    updateTypingStatus(false) // Clear typing status when sending
+    updateTypingStatus(false)
+    // Reset unread count for self
+    setUnreadCount(0)
+    document.title = originalTitle.current
     const messageRef = push(ref(database, `messages/${chatId}`))
     await set(messageRef, {
       senderId: userId,
@@ -329,30 +370,24 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button 
             onClick={handleStop}
-            style={{ 
-              padding: '8px', 
-              borderRadius: '50%', 
-              background: 'none', 
-              border: 'none', 
-              cursor: 'pointer',
-              color: '#71717a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
+            style={{ padding: '8px', borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <ArrowLeft size={20} />
           </button>
-          <div style={{ 
-            width: '10px', 
-            height: '10px', 
-            borderRadius: '50%', 
-            backgroundColor: partnerOnline ? '#10b981' : '#ef4444',
-            boxShadow: partnerOnline ? '0 0 8px rgba(16, 185, 129, 0.5)' : 'none'
-          }} />
-          <span style={{ fontWeight: 500, color: '#ffffff' }}>
-            {partnerOnline ? 'MUJian Online' : 'Disconnected'}
-          </span>
+          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: partnerOnline ? '#10b981' : '#ef4444', boxShadow: partnerOnline ? '0 0 8px rgba(16, 185, 129, 0.5)' : 'none' }} />
+          <div>
+            <span style={{ fontWeight: 500, color: '#ffffff', fontSize: '14px' }}>
+              {partnerOnline ? 'MUJian Online' : 'Disconnected'}
+            </span>
+            {/* Show partner mood if available */}
+            {chatMoods && partnerOnline && (() => {
+              const partnerMood = chatMoods.user1 === currentUserId ? chatMoods.mood2 : chatMoods.mood1
+              const moodEmojis: Record<string, string> = { happy: '😊', curious: '🤔', low: '😢', venting: '😤' }
+              return partnerMood ? (
+                <span style={{ fontSize: '11px', color: '#71717a', marginLeft: '6px' }}>{moodEmojis[partnerMood]} {partnerMood}</span>
+              ) : null
+            })()}
+          </div>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -679,11 +714,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             
             let bgStyle: React.CSSProperties = {}
             if (isSocial) {
-              if (isInsta) {
-                bgStyle = { background: 'linear-gradient(135deg, #a855f7, #ec4899)', color: '#fff' }
-              } else {
-                bgStyle = { background: 'linear-gradient(135deg, #eab308, #f59e0b)', color: '#000' }
-              }
+              if (isInsta) bgStyle = { background: 'linear-gradient(135deg, #a855f7, #ec4899)', color: '#fff' }
+              else bgStyle = { background: 'linear-gradient(135deg, #eab308, #f59e0b)', color: '#000' }
             } else if (isMe) {
               bgStyle = { background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: '#000' }
             } else {
@@ -692,16 +724,16 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             
             return (
               <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
-                <div style={{ 
-                  maxWidth: '80%', 
-                  padding: '10px 16px', 
-                  borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', 
-                  fontSize: '15px',
-                  lineHeight: 1.5,
-                  wordBreak: 'break-word',
-                  ...bgStyle
-                }}>
+                <div style={{ maxWidth: '80%', padding: '10px 16px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word', ...bgStyle }}>
                   {msg.text}
+                  {/* Read receipt ticks for my messages */}
+                  {isMe && !isSocial && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '6px', opacity: 0.7 }}>
+                      {msg.readAt
+                        ? <CheckCheck size={12} color="#2563eb" />
+                        : <Check size={12} color="#000" />}
+                    </span>
+                  )}
                 </div>
               </div>
             )

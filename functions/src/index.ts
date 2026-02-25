@@ -200,6 +200,86 @@ export const cleanupOldChats = functions.pubsub
   });
 
 // ============================================
+// CLEANUP EXPIRED CONFESSIONS (48h TTL)
+// ============================================
+
+export const cleanupExpiredConfessions = functions.pubsub
+  .schedule('every 6 hours')
+  .onRun(async () => {
+    const now = Date.now();
+    console.log('Cleaning up expired confessions...');
+
+    try {
+      const snap = await db.ref('confessions')
+        .orderByChild('expiresAt')
+        .endAt(now)
+        .once('value');
+
+      if (!snap.exists()) {
+        console.log('No expired confessions');
+        return null;
+      }
+
+      const updates: Record<string, null> = {};
+      let count = 0;
+      snap.forEach((child) => {
+        if (child.key) {
+          updates[`confessions/${child.key}`] = null;
+          count++;
+        }
+      });
+
+      await db.ref().update(updates);
+      console.log(`Deleted ${count} expired confessions`);
+      return null;
+    } catch (error) {
+      console.error('Confession cleanup failed:', error);
+      throw error;
+    }
+  });
+
+// ============================================
+// CLEANUP EXPIRED GROUP ROOMS (30min TTL)
+// ============================================
+
+export const cleanupExpiredGroupRooms = functions.pubsub
+  .schedule('every 30 minutes')
+  .onRun(async () => {
+    const cutoff = Date.now() - 30 * 60 * 1000; // 30 min ago
+    console.log('Cleaning up expired group rooms...');
+
+    try {
+      const snap = await db.ref('groupChats')
+        .orderByChild('createdAt')
+        .endAt(cutoff)
+        .once('value');
+
+      if (!snap.exists()) {
+        console.log('No expired group rooms');
+        return null;
+      }
+
+      const updates: Record<string, null> = {};
+      let count = 0;
+      snap.forEach((child) => {
+        if (child.key) {
+          updates[`groupChats/${child.key}`] = null;
+          updates[`groupMessages/${child.key}`] = null; // delete messages too
+          count++;
+        }
+      });
+
+      await db.ref().update(updates);
+      console.log(`Deleted ${count} expired group rooms + their messages`);
+      return null;
+    } catch (error) {
+      console.error('Group room cleanup failed:', error);
+      throw error;
+    }
+  });
+
+
+// ============================================
 // CLEANUP OLD FEEDBACK (Scheduled Function)
 // ============================================
 

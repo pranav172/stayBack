@@ -1,25 +1,40 @@
 {
-  "name": "mujAnon - Anonymous Chat for MUJians",
+  "name": "mujAnon",
   "short_name": "mujAnon",
-  "description": "Anonymous chat for Manipal University Jaipur students. No names, real talks.",
+  "description": "Anonymous chat for MUJians. No names, no judgment.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#f59e0b",
   "orientation": "portrait",
-  "categories": ["social", "communication"],
+  "background_color": "#0a0a12",
+  "theme_color": "#f59e0b",
+  "categories": ["social", "lifestyle"],
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Confession Wall",
+      "url": "/confessions",
+      "description": "Browse anonymous confessions"
+    },
+    {
+      "name": "Group Rooms",
+      "url": "/groups",
+      "description": "Join anonymous group chats"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

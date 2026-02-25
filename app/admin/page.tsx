@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { database } from '@/lib/firebase'
 import { ref, onValue, query, orderByChild, limitToLast, remove } from 'firebase/database'
-import { Users, MessageCircle, Flag, Activity, Clock } from 'lucide-react'
+import { Users, MessageCircle, Flag, Activity, Clock, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 interface Stats {
@@ -236,17 +236,28 @@ export default function AdminDashboard() {
             <Flag size={20} style={{ color: '#ef4444' }} />
             Recent Reports
           </h2>
-          <Link href="/admin/reports" style={{
-            padding: '8px 16px',
-            borderRadius: '8px',
-            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            color: '#f59e0b',
-            fontSize: '14px',
-            textDecoration: 'none'
-          }}>
-            View All
-          </Link>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Link href="/admin/analytics" style={{
+              padding: '8px 16px', borderRadius: '8px',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              color: '#6366f1', fontSize: '14px', textDecoration: 'none',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <TrendingUp size={14} /> Analytics
+            </Link>
+            <Link href="/admin/reports" style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              color: '#f59e0b',
+              fontSize: '14px',
+              textDecoration: 'none'
+            }}>
+              View All
+            </Link>
+          </div>
         </div>
 
         {recentReports.length === 0 ? (

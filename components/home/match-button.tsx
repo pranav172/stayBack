@@ -9,6 +9,7 @@ import { checkShadowban } from '@/lib/shadowban'
 import { checkVerificationStatus } from '@/lib/email-verification'
 import { track, EVENTS, initAnalytics, identifyUser } from '@/lib/analytics'
 import { useConnection } from '@/components/connection-provider'
+import { playMatchSound, unlockAudio } from '@/lib/sounds'
 import Link from 'next/link'
 
 const ICEBREAKERS = [
@@ -17,19 +18,62 @@ const ICEBREAKERS = [
   "Best late-night study spot?",
   "What's your go-to canteen order?",
   "Hostel or day scholar life?",
+  "What course do you regret not taking?",
+  "Best thing about MUJ?",
 ]
 
 export type ChatMode = 'platonics' | 'study' | 'random'
+export type Mood = 'happy' | 'low' | 'venting' | 'curious' | null
 
-type MatchStep = 'mode' | 'tags' | 'matching'
+type MatchStep = 'mode' | 'tags' | 'mood' | 'matching'
 
 const MODES = [
-  { id: 'platonics' as ChatMode, emoji: '🤝', title: 'Platonics', desc: 'Make friends' },
-  { id: 'study' as ChatMode, emoji: '📚', title: 'Study', desc: 'Find study buddy' },
-  { id: 'random' as ChatMode, emoji: '🎲', title: 'Random', desc: 'Match anyone' },
+  {
+    id: 'platonics' as ChatMode,
+    emoji: '🤝',
+    title: 'Platonics',
+    desc: 'Make friends, no pressure',
+  },
+  {
+    id: 'study' as ChatMode,
+    emoji: '📚',
+    title: 'Study',
+    desc: 'Find a study buddy',
+  },
+  {
+    id: 'random' as ChatMode,
+    emoji: '🎲',
+    title: 'Random',
+    desc: 'Match with anyone',
+  },
 ]
 
-const TAGS = ['Engineering', 'Law', 'Business', 'Gaming', 'Music', 'Anime', 'Sports', 'Tech', 'Movies', 'Memes']
+const TAGS = [
+  'Engineering', 'Law', 'Business', 'Gaming', 'Music',
+  'Anime', 'Sports', 'Tech', 'Movies', 'Memes', 'Art', 'Fitness',
+]
+
+const MOODS: { id: Mood; emoji: string; label: string; desc: string }[] = [
+  { id: 'happy', emoji: '😊', label: 'Vibing', desc: 'Want to have fun' },
+  { id: 'curious', emoji: '🤔', label: 'Curious', desc: 'Want to explore ideas' },
+  { id: 'low', emoji: '😢', label: 'Need a listener', desc: 'Just want to talk' },
+  { id: 'venting', emoji: '😤', label: 'Venting', desc: 'Need to get it out' },
+]
+
+// Mood compatibility — who matches with whom
+const MOOD_COMPATIBLE: Record<string, string[]> = {
+  happy: ['happy', 'curious', 'random', ''],
+  curious: ['happy', 'curious', 'random', ''],
+  low: ['low', 'happy', 'random', ''],       // happy people can comfort low
+  venting: ['low', 'venting', 'random', ''], // low/venting can listen to each other
+  '': ['happy', 'curious', 'low', 'venting', 'random', ''],
+}
+
+function isMoodCompatible(myMood: Mood, theirMood: Mood): boolean {
+  const my = myMood || ''
+  const their = theirMood || ''
+  return (MOOD_COMPATIBLE[my] ?? ['']).includes(their)
+}
 
 function MatchButtonInner() {
   const [status, setStatus] = useState<'idle' | 'searching' | 'matched'>('idle')
@@ -37,20 +81,20 @@ function MatchButtonInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { userId, onlineCount, isConnected } = useConnection()
-  
+
   const [step, setStep] = useState<MatchStep>('mode')
   const [selectedMode, setSelectedMode] = useState<ChatMode>('random')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedMood, setSelectedMood] = useState<Mood>(null)
   const [icebreaker, setIcebreaker] = useState(ICEBREAKERS[0])
   const [waitTime, setWaitTime] = useState(0)
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [isVerified, setIsVerified] = useState(false)
   const [isShadowbanned, setIsShadowbanned] = useState(false)
-  
+
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const queueRef = useRef<string | null>(null)
 
-  // Session ID for queue/chat matching only (not for connections)
   const getSessionId = () => {
     if (typeof window === 'undefined') return crypto.randomUUID()
     let sid = sessionStorage.getItem('mujanon_session_id')
@@ -74,26 +118,23 @@ function MatchButtonInner() {
     }
   }, [status])
 
-  // Check verification + shadowban when userId becomes available
   useEffect(() => {
     if (!userId) return
     initAnalytics()
     identifyUser(userId)
     track(EVENTS.SESSION_STARTED)
-
     checkVerificationStatus(userId).then(v => setIsVerified(v.isVerified))
     checkShadowban().then(s => setIsShadowbanned(s.isShadowbanned))
   }, [userId])
 
-  // Auto-match from query param
   useEffect(() => {
     if (userId && isConnected && searchParams.get('autoMatch') === 'true') {
       setStep('matching')
       setTimeout(() => handleMatch(), 500)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, isConnected, searchParams])
 
-  // Clean up queue on unmount (but NOT the connection — that's app-level now)
   useEffect(() => {
     return () => {
       if (unsubscribeRef.current) unsubscribeRef.current()
@@ -114,92 +155,98 @@ function MatchButtonInner() {
 
   const handleMatch = useCallback(async () => {
     if (!userId || loading || !isConnected) return
+    unlockAudio() // Unlock audio context on user gesture
     setLoading(true)
-    
-    // Shadowbanned users see fake searching state - never actually match
+
     if (isShadowbanned) {
       setStatus('searching')
       setLoading(false)
       return
     }
-    
+
     try {
-      // Check if user already has an active chat using userChats index
-      // IMPORTANT: validate against actual chat data to avoid stale entries
+      // Check if user already has an active chat
       const userChatsSnapshot = await get(ref(database, `userChats/${userId}`))
       if (userChatsSnapshot.exists()) {
         const userChats = userChatsSnapshot.val()
         for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, { isActive: boolean; sessionId: string }>)) {
           if (chatInfo.isActive && chatInfo.sessionId === sessionId.current) {
-            // Cross-check: verify the actual chat is still active
             const chatSnap = await get(ref(database, `chats/${chatId}`))
             if (chatSnap.exists() && chatSnap.val().isActive) {
-              console.log('[Match] Found active chat, redirecting:', chatId)
               setStatus('matched'); setLoading(false); router.push(`/chat/${chatId}`); return
             } else {
-              // Stale entry — clean it up
-              console.log('[Match] Cleaning stale userChat entry:', chatId)
               await set(ref(database, `userChats/${userId}/${chatId}/isActive`), false).catch(() => {})
             }
           }
         }
       }
-      
+
       const queueSnapshot = await get(ref(database, 'queue'))
       if (queueSnapshot.exists()) {
         const queue = queueSnapshot.val()
         const waitingKeys = Object.keys(queue).filter(key => {
           const e = queue[key]
           if (e.sessionId === sessionId.current || e.userId === userId) return false
+          // Mode compatibility: random matches all; non-random must share a mode or one side be random
           if (selectedMode !== 'random' && e.mode !== 'random' && e.mode !== selectedMode) return false
+          // Mood compatibility
+          if (!isMoodCompatible(selectedMood, e.mood ?? null)) return false
+          // Verified filter
+          if (verifiedOnly && !e.isVerified) return false
           return true
         }).sort((a, b) => {
+          // Sort by tag overlap (more overlap = higher priority)
           const aO = (queue[a].tags || []).filter((t: string) => selectedTags.includes(t)).length
           const bO = (queue[b].tags || []).filter((t: string) => selectedTags.includes(t)).length
           return bO - aO
         })
-        
+
         if (waitingKeys.length > 0) {
           const matchKey = waitingKeys[0]
           const matchData = queue[matchKey]
           const chatRef = push(ref(database, 'chats'))
           const chatId = chatRef.key!
-          
+
           await set(chatRef, {
             user1: matchData.userId, user2: userId,
             session1: matchData.sessionId, session2: sessionId.current,
             mode: selectedMode, tags: [...new Set([...selectedTags, ...(matchData.tags || [])])],
-            createdAt: serverTimestamp(), isActive: true
+            mood1: matchData.mood ?? null, mood2: selectedMood ?? null,
+            createdAt: serverTimestamp(), isActive: true,
           })
-          
-          // Update userChats index for both users
+
           await set(ref(database, `userChats/${matchData.userId}/${chatId}`), {
-            sessionId: matchData.sessionId, isActive: true
+            sessionId: matchData.sessionId, isActive: true,
           })
           await set(ref(database, `userChats/${userId}/${chatId}`), {
-            sessionId: sessionId.current, isActive: true
+            sessionId: sessionId.current, isActive: true,
           })
-          
+
           await remove(ref(database, `queue/${matchKey}`))
+          playMatchSound()
           setStatus('matched'); setLoading(false); router.push(`/chat/${chatId}`); return
         }
       }
-      
+
+      // Still searching — add to queue
       const myQueueRef = push(ref(database, 'queue'))
       queueRef.current = myQueueRef.key
       await set(myQueueRef, {
         userId, sessionId: sessionId.current, connectionId: userId,
-        mode: selectedMode, tags: selectedTags, timestamp: serverTimestamp()
+        mode: selectedMode, tags: selectedTags,
+        mood: selectedMood ?? '',
+        isVerified,
+        timestamp: serverTimestamp(),
       })
       onDisconnect(myQueueRef).remove()
       setStatus('searching'); setLoading(false)
-      
-      // Listen to user's own chat index instead of all chats
+
       const unsubscribe = onValue(ref(database, `userChats/${userId}`), (snapshot) => {
         if (snapshot.exists()) {
           const userChats = snapshot.val()
           for (const [chatId, chatInfo] of Object.entries(userChats as Record<string, { isActive: boolean; sessionId: string }>)) {
             if (chatInfo.isActive && chatInfo.sessionId === sessionId.current) {
+              playMatchSound()
               setStatus('matched')
               if (queueRef.current) { remove(ref(database, `queue/${queueRef.current}`)); queueRef.current = null }
               unsubscribe(); unsubscribeRef.current = null
@@ -210,7 +257,7 @@ function MatchButtonInner() {
       })
       unsubscribeRef.current = unsubscribe
     } catch (e) { console.error(e); setLoading(false) }
-  }, [userId, loading, router, selectedMode, selectedTags, isShadowbanned, isConnected])
+  }, [userId, loading, router, selectedMode, selectedTags, selectedMood, isShadowbanned, isConnected, verifiedOnly, isVerified])
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag))
@@ -219,14 +266,13 @@ function MatchButtonInner() {
 
   const isAlone = onlineCount <= 1
 
-  // Compact Mode Selection
+  // ── Step 1: Mode Selection ──────────────────────────────────────────────────────────────────
   if (step === 'mode') {
     return (
       <div style={{ width: '100%', maxWidth: '320px' }}>
-        {/* Online indicator */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-          <div style={{ 
-            display: 'flex', alignItems: 'center', gap: '8px', 
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
             padding: '6px 14px', borderRadius: '20px',
             backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)'
           }}>
@@ -236,7 +282,6 @@ function MatchButtonInner() {
           </div>
         </div>
 
-        {/* Mode cards - horizontal on larger screens, compact */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
           {MODES.map((mode) => {
             const sel = selectedMode === mode.id
@@ -244,26 +289,26 @@ function MatchButtonInner() {
               <button
                 key={mode.id}
                 onClick={() => setSelectedMode(mode.id)}
-                style={{ 
-                  flex: 1, padding: '12px 8px', borderRadius: '10px', 
-                  border: sel ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--border-color)', 
+                style={{
+                  flex: 1, padding: '12px 8px', borderRadius: '10px',
+                  border: sel ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--border-color)',
                   backgroundColor: sel ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-surface)',
-                  cursor: 'pointer', textAlign: 'center',
-                  transition: 'all 0.2s'
+                  cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                  transform: sel ? 'scale(1.03)' : 'scale(1)',
                 }}
               >
                 <div style={{ fontSize: '20px', marginBottom: '4px' }}>{mode.emoji}</div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: sel ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{mode.title}</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: sel ? '#fbbf24' : 'var(--text-secondary)' }}>{mode.title}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{mode.desc}</div>
               </button>
             )
           })}
         </div>
 
-        {/* Continue button */}
         <button
           onClick={() => setStep('tags')}
-          style={{ 
-            width: '100%', padding: '12px', borderRadius: '10px', 
+          style={{
+            width: '100%', padding: '12px', borderRadius: '10px',
             background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
             border: 'none', color: '#000', fontWeight: 600, fontSize: '14px',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
@@ -278,7 +323,7 @@ function MatchButtonInner() {
     )
   }
 
-  // Compact Tags Selection
+  // ── Step 2: Tags ─────────────────────────────────────────────────────────────────────────────
   if (step === 'tags') {
     return (
       <div style={{ width: '100%', maxWidth: '320px' }}>
@@ -307,16 +352,11 @@ function MatchButtonInner() {
           })}
         </div>
 
-        {/* Verified filter toggle */}
-        <div style={{ 
-          padding: '10px 14px', 
-          backgroundColor: 'rgba(18, 18, 26, 0.8)', 
-          borderRadius: '10px', 
-          border: '1px solid rgba(255,255,255,0.08)',
-          marginBottom: '14px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
+        {/* Verified filter */}
+        <div style={{
+          padding: '10px 14px', backgroundColor: 'rgba(18, 18, 26, 0.8)',
+          borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)',
+          marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldCheck size={16} style={{ color: isVerified ? '#10b981' : '#71717a' }} />
@@ -327,33 +367,65 @@ function MatchButtonInner() {
             style={{
               width: '40px', height: '22px', borderRadius: '11px',
               backgroundColor: verifiedOnly ? '#f59e0b' : 'var(--bg-surface)',
-              border: 'none', cursor: 'pointer', position: 'relative',
-              transition: 'all 0.2s'
+              border: 'none', cursor: 'pointer', position: 'relative', transition: 'all 0.2s'
             }}
           >
             <div style={{
-              width: '18px', height: '18px', borderRadius: '50%',
-              backgroundColor: '#fff',
+              width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#fff',
               position: 'absolute', top: '2px',
-              left: verifiedOnly ? '20px' : '2px',
-              transition: 'all 0.2s'
+              left: verifiedOnly ? '20px' : '2px', transition: 'all 0.2s'
             }} />
           </button>
         </div>
-        
+
         {!isVerified && (
-          <Link href="/verify" style={{
-            display: 'block',
-            textAlign: 'center',
-            fontSize: '12px',
-            color: '#f59e0b',
-            marginBottom: '14px',
-            textDecoration: 'none'
-          }}>
+          <Link href="/verify" style={{ display: 'block', textAlign: 'center', fontSize: '12px', color: '#f59e0b', marginBottom: '14px', textDecoration: 'none' }}>
             <BadgeCheck size={12} style={{ display: 'inline', marginRight: '4px' }} />
             Verify your MUJ email to unlock this filter
           </Link>
         )}
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => { setStep('mood') }} style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Skip</button>
+          <button onClick={() => { setStep('mood') }} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', border: 'none', color: '#000', fontWeight: 600, fontSize: '13px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.25)' }}>Next →</button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Step 3: Mood ─────────────────────────────────────────────────────────────────────────────
+  if (step === 'mood') {
+    return (
+      <div style={{ width: '100%', maxWidth: '320px' }}>
+        <button onClick={() => setStep('tags')} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#71717a', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', marginBottom: '12px' }}>
+          <ArrowLeft size={14} /> Back
+        </button>
+
+        <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'center', marginBottom: '4px' }}>How are you feeling?</p>
+        <p style={{ fontSize: '12px', color: '#52525b', textAlign: 'center', marginBottom: '14px' }}>We&apos;ll match you with someone compatible</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+          {MOODS.map((m) => {
+            const sel = selectedMood === m.id
+            return (
+              <button
+                key={m.id}
+                onClick={() => setSelectedMood(sel ? null : m.id)}
+                style={{
+                  padding: '14px 10px', borderRadius: '12px', textAlign: 'center',
+                  border: sel ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--border-color)',
+                  backgroundColor: sel ? 'rgba(245, 158, 11, 0.12)' : 'var(--bg-surface)',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                  transform: sel ? 'scale(1.04)' : 'scale(1)',
+                }}
+              >
+                <div style={{ fontSize: '24px', marginBottom: '4px' }}>{m.emoji}</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: sel ? '#fbbf24' : 'var(--text-secondary)' }}>{m.label}</div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{m.desc}</div>
+              </button>
+            )
+          })}
+        </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => { setStep('matching'); handleMatch() }} style={{ flex: 1, padding: '10px', borderRadius: '10px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>Skip</button>
@@ -363,7 +435,7 @@ function MatchButtonInner() {
     )
   }
 
-  // Matching view
+  // ── Step 4: Matching / Searching ─────────────────────────────────────────────────────────────
   return (
     <div style={{ width: '100%', maxWidth: '300px', textAlign: 'center' }}>
       {status === 'searching' && (
@@ -379,6 +451,15 @@ function MatchButtonInner() {
         </div>
       </div>
 
+      {/* Mood badge while searching */}
+      {selectedMood && status === 'searching' && (
+        <div style={{ marginBottom: '12px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '4px 10px', backgroundColor: 'var(--bg-surface)', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
+            {MOODS.find(m => m.id === selectedMood)?.emoji} Mood: {MOODS.find(m => m.id === selectedMood)?.label}
+          </span>
+        </div>
+      )}
+
       {status === 'searching' && (
         <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface)', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Topic idea:</p>
@@ -386,26 +467,27 @@ function MatchButtonInner() {
         </div>
       )}
 
-      <button 
+      <button
         onClick={() => status === 'searching' ? handleStop() : handleMatch()}
         disabled={loading || status === 'matched' || !userId}
-        style={{ 
-          width: '100%', padding: '14px 24px', borderRadius: '12px', 
+        style={{
+          width: '100%', padding: '14px 24px', borderRadius: '12px',
           background: status === 'searching' ? 'var(--bg-surface)' : 'linear-gradient(135deg, #f59e0b, #fbbf24)',
           border: status === 'searching' ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
           color: status === 'searching' ? 'var(--text-primary)' : '#000', fontWeight: 600, fontSize: '15px',
           cursor: (loading || status === 'matched' || !userId) ? 'not-allowed' : 'pointer',
           opacity: (loading || status === 'matched' || !userId) ? 0.5 : 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          boxShadow: status === 'searching' ? 'none' : '0 4px 20px rgba(245, 158, 11, 0.3)'
+          boxShadow: status === 'searching' ? 'none' : '0 4px 20px rgba(245, 158, 11, 0.3)',
+          transition: 'all 0.2s',
         }}
       >
         {loading ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
           : status === 'searching' ? <><Square size={14} style={{ fill: '#ef4444', color: '#ef4444' }} /> Stop</>
-          : status === 'matched' ? <span style={{ color: '#10b981' }}>Matched!</span>
+          : status === 'matched' ? <span style={{ color: '#10b981' }}>Matched! 🎉</span>
           : <><Zap size={18} /> Find a MUJian</>}
       </button>
-      
+
       {status === 'searching' && (
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '10px' }}>Searching... {waitTime}s</p>
       )}
@@ -413,7 +495,6 @@ function MatchButtonInner() {
   )
 }
 
-// Wrapper with Suspense for Next.js SSR compatibility
 export function MatchButton() {
   return (
     <Suspense fallback={
