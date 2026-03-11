@@ -73,10 +73,15 @@ export async function sendMagicLink(email: string): Promise<{ success: boolean; 
     return { success: true }
   } catch (err: unknown) {
     console.error('sendMagicLink error:', err)
-    const msg = err instanceof Error ? err.message : 'Unknown error'
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('auth/operation-not-allowed')) {
+      return { success: false, error: 'Email link sign-in is not enabled. Enable it in Firebase Console → Authentication → Sign-in method → Email link.' }
+    }
     if (msg.includes('auth/invalid-email')) return { success: false, error: 'Invalid email address.' }
-    if (msg.includes('auth/too-many-requests')) return { success: false, error: 'Too many requests — wait a few minutes.' }
-    return { success: false, error: 'Failed to send verification link. Please try again.' }
+    if (msg.includes('auth/too-many-requests')) return { success: false, error: 'Too many requests — wait a few minutes and try again.' }
+    if (msg.includes('auth/unauthorized-domain')) return { success: false, error: 'This domain is not authorised. Add it in Firebase Console → Authentication → Authorized domains.' }
+    // Surface the raw error in development to make debugging easy
+    return { success: false, error: `Failed to send link: ${msg}` }
   }
 }
 
