@@ -62,8 +62,13 @@ export default function VerifyPage() {
     try {
       const newOtp = generateOTP()
       await storeOTP(user.uid, trimmedEmail, newOtp)
-      // NOTE: In production, email the OTP via a Cloud Function/API route.
-      // For now, admin can look up the code in Firebase → pendingVerifications/{uid}
+      // Send OTP via API route (uses Resend in production, console.log in dev)
+      const res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, otp: newOtp }),
+      })
+      if (!res.ok) throw new Error('Email send failed')
       setStep('otp')
     } catch (err) {
       console.error(err)

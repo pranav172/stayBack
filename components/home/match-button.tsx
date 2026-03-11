@@ -75,6 +75,51 @@ function isMoodCompatible(myMood: Mood, theirMood: Mood): boolean {
   return (MOOD_COMPATIBLE[my] ?? ['']).includes(their)
 }
 
+// ── Share Card (shown when user is alone in queue) ────────────────────────
+function ShareCard() {
+  const [copied, setCopied] = useState(false)
+
+  const handleShare = async () => {
+    const url = window.location.origin
+    const text = 'Anonymous chat for MUJians — no names, real vibes 🔥'
+    if (navigator.share) {
+      try { await navigator.share({ title: 'mujAnon', text, url }) } catch { /* cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(`${text}\n${url}`)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    }
+  }
+
+  return (
+    <div style={{
+      marginTop: '14px', padding: '14px 16px', borderRadius: '14px',
+      background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(251,191,36,0.08))',
+      border: '1px solid rgba(245,158,11,0.25)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+      animation: 'fade-in 0.4s ease-out',
+    }}>
+      <p style={{ fontSize: '13px', fontWeight: 600, color: '#f59e0b', margin: 0 }}>
+        👋 You&apos;re the first one here!
+      </p>
+      <p style={{ fontSize: '12px', color: '#71717a', margin: 0, textAlign: 'center' }}>
+        Invite a friend — the more, the merrier
+      </p>
+      <button
+        onClick={handleShare}
+        style={{
+          padding: '8px 20px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
+          background: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+          border: 'none', color: '#000', cursor: 'pointer',
+          boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
+        }}
+      >
+        {copied ? '✅ Link copied!' : '📤 Share mujAnon'}
+      </button>
+    </div>
+  )
+}
+
 function MatchButtonInner() {
   const [status, setStatus] = useState<'idle' | 'searching' | 'matched'>('idle')
   const [loading, setLoading] = useState(false)
@@ -318,7 +363,7 @@ function MatchButtonInner() {
           Continue <ChevronRight size={16} />
         </button>
 
-        {isAlone && <p style={{ color: '#52525b', fontSize: '12px', textAlign: 'center', marginTop: '12px' }}>You&apos;re first here. Share the link!</p>}
+        {isAlone && <ShareCard />}
       </div>
     )
   }

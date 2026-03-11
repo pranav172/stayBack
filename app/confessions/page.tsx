@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { database, auth } from '@/lib/firebase'
 import { ref, push, set, onValue, increment } from 'firebase/database'
 import { onAuthStateChanged } from 'firebase/auth'
-import { Heart, X, MessageCircle, ArrowLeft, Send, ChevronDown, ChevronUp, Loader2, Edit3 } from 'lucide-react'
+import { Heart, X, MessageCircle, ArrowLeft, Send, ChevronDown, ChevronUp, Loader2, Edit3, Flag, Share2 } from 'lucide-react'
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useConnection } from '@/components/connection-provider'
@@ -58,6 +58,8 @@ function SwipeCard({
   const [commentText, setCommentText] = useState('')
   const [comments, setComments] = useState<Comment[]>([])
   const [dragDelta, setDragDelta] = useState(0)
+  const [reported, setReported] = useState(false)
+  const [reportToast, setReportToast] = useState(false)
   const { userId } = useConnection()
 
   // Real-time comments
@@ -80,6 +82,23 @@ function SwipeCard({
     if (!commentText.trim() || !user) return
     const result = moderateMessage(commentText)
     if (!result.isClean) return
+
+    // Comment rate limit: max 10 per 10 minutes per device
+    const RL_KEY = 'mujanon_comment_rl'
+    const now = Date.now()
+    const raw = localStorage.getItem(RL_KEY)
+    const rl = raw ? JSON.parse(raw) : { count: 0, resetAt: now + 10 * 60 * 1000 }
+    if (now > rl.resetAt) {
+      localStorage.setItem(RL_KEY, JSON.stringify({ count: 1, resetAt: now + 10 * 60 * 1000 }))
+    } else if (rl.count >= 10) {
+      const minsLeft = Math.ceil((rl.resetAt - now) / 60000)
+      setCommentText(`⏳ Slow down! Try again in ${minsLeft}m`)
+      setTimeout(() => setCommentText(''), 2000)
+      return
+    } else {
+      localStorage.setItem(RL_KEY, JSON.stringify({ ...rl, count: rl.count + 1 }))
+    }
+
     const text = commentText.trim()
     setCommentText('')
     try {
@@ -88,6 +107,33 @@ function SwipeCard({
         timestamp: Date.now(),
       })
     } catch (e) { console.error('Comment failed:', e) }
+  }
+
+  const handleReport = async () => {
+    if (reported) return
+    setReported(true)
+    try {
+      await push(ref(database, `reports`), {
+        type: 'confession',
+        confessionId: confession.id,
+        confessionText: confession.text.slice(0, 100),
+        reportedAt: Date.now(),
+        reporterUid: userId || 'anon',
+      })
+      setReportToast(true)
+      setTimeout(() => setReportToast(false), 2500)
+    } catch (e) { console.error('Report failed:', e) }
+  }
+
+  const handleShareConfession = async () => {
+    const text = `"${confession.text.slice(0, 140)}" — Anonymous MUJian`
+    const url = window.location.href
+    if (navigator.share) {
+      try { await navigator.share({ title: 'mujAnon Confession', text, url }) } catch { /* cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(`${text}\n${url}`)
+      // brief visual cue via reportToast re-use — just log, card shows no separate state
+    }
   }
 
   // — Touch / Pointer drag —————————————————————————————
@@ -203,10 +249,28 @@ function SwipeCard({
             })()}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Share */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleShareConfession() }}
+              title="Share confession"
+              style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#52525b', padding: '4px' }}
+            >
+              <Share2 size={13} />
+            </button>
+            {/* Report */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleReport() }}
+              title={reported ? 'Reported' : 'Report confession'}
+              style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: reported ? 'default' : 'pointer', color: reported ? '#ef4444' : '#52525b', padding: '4px' }}
+            >
+              <Flag size={13} style={{ fill: reported ? '#ef4444' : 'none' }} />
+            </button>
+            {/* Hearts */}
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: hearted ? '#ef4444' : '#71717a' }}>
               <Heart size={14} style={{ fill: hearted ? '#ef4444' : 'none', color: hearted ? '#ef4444' : '#71717a' }} />
               {confession.hearts || 0}
             </span>
+            {/* Comments */}
             <button
               onClick={(e) => { e.stopPropagation(); setShowComments(!showComments) }}
               style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: showComments ? '#f59e0b' : '#71717a', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -217,6 +281,18 @@ function SwipeCard({
             </button>
           </div>
         </div>
+
+        {/* Report toast */}
+        {reportToast && (
+          <div style={{
+            position: 'absolute', bottom: '70px', left: '50%', transform: 'translateX(-50%)',
+            backgroundColor: '#1a1a2a', border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: '20px', padding: '8px 16px', fontSize: '12px', color: '#ef4444',
+            whiteSpace: 'nowrap', zIndex: 20, animation: 'fade-in 0.2s ease',
+          }}>
+            🚩 Reported &mdash; we&apos;ll review it
+          </div>
+        )}
 
         {/* Comments panel */}
         {showComments && (
@@ -256,7 +332,7 @@ function SwipeCard({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────────────────────────
 export default function ConfessionsPage() {
-  const { userId } = useConnection()
+  useConnection() // ensures Firebase auth is connected
   const [confessions, setConfessions] = useState<Confession[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [heartedIds, setHeartedIds] = useState<Set<string>>(new Set())
