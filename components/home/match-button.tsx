@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, Zap, Square, Users, ShieldCheck, BadgeCheck, ChevronDown, ChevronUp } from 'lucide-react'
 import { checkShadowban } from '@/lib/shadowban'
 import { checkVerificationStatus } from '@/lib/email-verification'
+import { requestNotificationPermission, listenForMatchNotification, stopMatchNotificationListener } from '@/lib/notifications'
 import { track, EVENTS, initAnalytics, identifyUser } from '@/lib/analytics'
 import { useConnection } from '@/components/connection-provider'
 import { playMatchSound, unlockAudio } from '@/lib/sounds'
@@ -138,6 +139,7 @@ function MatchButtonInner() {
     try {
       if (queueRef.current) { await remove(ref(database, `queue/${queueRef.current}`)); queueRef.current = null }
       if (unsubscribeRef.current) { unsubscribeRef.current(); unsubscribeRef.current = null }
+      stopMatchNotificationListener()
       setStatus('idle')
     } finally { setLoading(false) }
   }, [userId])
@@ -209,12 +211,18 @@ function MatchButtonInner() {
       onDisconnect(myQueueRef).remove()
       setStatus('searching'); setLoading(false)
 
+      // Request notification permission + start match listener
+      requestNotificationPermission(userId).then(granted => {
+        if (granted) listenForMatchNotification(userId, sessionId.current)
+      })
+
       const unsubscribe = onValue(ref(database, `userChats/${userId}`), (snapshot) => {
         if (snapshot.exists()) {
           for (const [chatId, chatInfo] of Object.entries(snapshot.val() as Record<string, { isActive: boolean; sessionId: string }>)) {
             if (chatInfo.isActive && chatInfo.sessionId === sessionId.current) {
               playMatchSound(); setStatus('matched')
               if (queueRef.current) { remove(ref(database, `queue/${queueRef.current}`)); queueRef.current = null }
+              stopMatchNotificationListener()
               unsubscribe(); unsubscribeRef.current = null
               router.push(`/chat/${chatId}`); return
             }

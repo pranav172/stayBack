@@ -243,6 +243,16 @@ function SwipeCard({
             })()}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Comment count badge */}
+            {commentCount > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowComments(true) }}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', padding: '4px', fontSize: '12px' }}
+              >
+                <MessageCircle size={13} />
+                {commentCount}
+              </button>
+            )}
             {/* Share */}
             <button
               onClick={(e) => { e.stopPropagation(); handleShareConfession() }}
@@ -337,6 +347,7 @@ export default function ConfessionsPage() {
   const [swipeHint, setSwipeHint] = useState(true)
   const [authReady, setAuthReady] = useState(!!auth.currentUser)
   const [postError, setPostError] = useState('')
+  const [sortMode, setSortMode] = useState<'new' | 'hot'>('new')
 
   // Wait for Firebase anonymous auth to complete
   useEffect(() => {
@@ -365,7 +376,7 @@ export default function ConfessionsPage() {
       const list: Confession[] = Object.entries(snapshot.val())
         .map(([id, v]) => ({ id, ...(v as Omit<Confession, 'id'>) }))
         .filter(c => !c.expiresAt || c.expiresAt > now)
-        .sort((a, b) => b.timestamp - a.timestamp)  // newest first
+        .sort((a, b) => b.timestamp - a.timestamp)  // always keep raw newest-first, we re-sort on render
       setConfessions(list)
     })
     return () => unsub()
@@ -425,9 +436,12 @@ export default function ConfessionsPage() {
     }
   }
 
-  const current = confessions[currentIndex]
-  const next = confessions[currentIndex + 1]
-  const done = currentIndex >= confessions.length
+  const sorted = sortMode === 'hot'
+    ? [...confessions].sort((a, b) => (b.hearts || 0) - (a.hearts || 0))
+    : confessions // already newest-first
+  const current = sorted[currentIndex]
+  const next = sorted[currentIndex + 1]
+  const done = currentIndex >= sorted.length
 
   return (
     <div style={{
@@ -464,6 +478,24 @@ export default function ConfessionsPage() {
         </div>
       </header>
 
+      {/* Sort tabs */}
+      <div style={{ flexShrink: 0, display: 'flex', gap: '8px', padding: '10px 20px 0', justifyContent: 'center' }}>
+        {(['new', 'hot'] as const).map(mode => (
+          <button
+            key={mode}
+            onClick={() => { setSortMode(mode); setCurrentIndex(0) }}
+            style={{
+              padding: '6px 18px', borderRadius: '16px', fontSize: '12px', fontWeight: 600,
+              border: sortMode === mode ? 'none' : '1px solid rgba(255,255,255,0.08)',
+              background: sortMode === mode ? 'linear-gradient(135deg,#f59e0b,#fbbf24)' : 'rgba(255,255,255,0.04)',
+              color: sortMode === mode ? '#000' : '#71717a',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            {mode === 'hot' ? '🔥 Hot' : '🕐 New'}
+          </button>
+        ))}
+      </div>
       {/* Swipe area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: '20px' }}>
         {confessions.length === 0 ? (

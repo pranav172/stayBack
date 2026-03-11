@@ -18,7 +18,10 @@ interface Message {
   text: string
   timestamp: number
   readAt?: number
+  reactions?: Record<string, string> // uid -> emoji
 }
+
+const REACTION_EMOJIS = ['😂', '❤️', '🔥', '😮', '👍', '💀']
 
 export default function ChatInterface({ chatId, currentUserId }: { chatId: string, currentUserId: string }) {
   const { userId: connUserId, onlineCount } = useConnection()
@@ -47,6 +50,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const [sessionExtended, setSessionExtended] = useState(false)
   const [partnerTyping, setPartnerTyping] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null) // messageId
   const originalTitle = useRef('mujAnon')
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -259,6 +263,19 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
       updateTypingStatus(true)
     } else {
       updateTypingStatus(false)
+    }
+  }
+
+  const handleReact = async (msgId: string, emoji: string) => {
+    if (!userId || chatEnded) return
+    setShowReactionPicker(null)
+    const reactionRef = ref(database, `messages/${chatId}/${msgId}/reactions/${userId}`)
+    // Toggle: if same emoji already set, remove it
+    const existing = messages.find(m => m.id === msgId)?.reactions?.[userId]
+    if (existing === emoji) {
+      await set(reactionRef, null)
+    } else {
+      await set(reactionRef, emoji)
     }
   }
 
@@ -723,18 +740,67 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             }
             
             return (
-              <div key={msg.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
-                <div style={{ maxWidth: '80%', padding: '10px 16px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word', ...bgStyle }}>
-                  {msg.text}
-                  {/* Read receipt ticks for my messages */}
-                  {isMe && !isSocial && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '6px', opacity: 0.7 }}>
-                      {msg.readAt
-                        ? <CheckCheck size={12} color="#2563eb" />
-                        : <Check size={12} color="#000" />}
-                    </span>
+              <div
+                key={msg.id}
+                style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: '16px', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}
+              >
+                {/* Bubble + reaction picker trigger */}
+                <div style={{ position: 'relative' }} onClick={() => !chatEnded && setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)}>
+                  <div style={{ maxWidth: '80%', padding: '10px 16px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word', cursor: 'pointer', ...bgStyle }}>
+                    {msg.text}
+                    {isMe && !isSocial && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '6px', opacity: 0.7 }}>
+                        {msg.readAt ? <CheckCheck size={12} color="#2563eb" /> : <Check size={12} color="#000" />}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Reaction emoji picker */}
+                  {showReactionPicker === msg.id && (
+                    <div style={{
+                      position: 'absolute', [isMe ? 'right' : 'left']: 0,
+                      bottom: '100%', marginBottom: '4px',
+                      backgroundColor: 'rgba(26,26,37,0.98)', border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: '20px', padding: '6px 10px',
+                      display: 'flex', gap: '6px', zIndex: 10,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                    }} onClick={e => e.stopPropagation()}>
+                      {REACTION_EMOJIS.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(msg.id, emoji)}
+                          style={{
+                            fontSize: '18px', border: 'none', background: 'none', cursor: 'pointer',
+                            padding: '2px', borderRadius: '6px', transition: 'transform 0.1s',
+                            transform: msg.reactions?.[userId] === emoji ? 'scale(1.4)' : 'scale(1)',
+                          }}
+                        >{emoji}</button>
+                      ))}
+                    </div>
                   )}
                 </div>
+
+                {/* Reaction count pills */}
+                {msg.reactions && Object.keys(msg.reactions).length > 0 && (() => {
+                  const counts: Record<string, number> = {}
+                  Object.values(msg.reactions).forEach(e => { counts[e] = (counts[e] || 0) + 1 })
+                  return (
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+                      {Object.entries(counts).map(([emoji, count]) => (
+                        <span
+                          key={emoji}
+                          onClick={() => handleReact(msg.id, emoji)}
+                          style={{
+                            fontSize: '11px', padding: '2px 7px', borderRadius: '10px', cursor: 'pointer',
+                            backgroundColor: msg.reactions?.[userId] === emoji ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.06)',
+                            border: msg.reactions?.[userId] === emoji ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                            color: '#e4e4e7',
+                          }}
+                        >{emoji} {count}</span>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}

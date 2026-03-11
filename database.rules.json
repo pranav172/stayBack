@@ -34,7 +34,13 @@
         ".read": "auth != null",
         "$messageId": {
           ".write": "auth != null",
-          ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 2000"
+          ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 2000",
+          "reactions": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid",
+              ".validate": "newData.isString() || newData.val() === null"
+            }
+          }
         }
       }
     },
