@@ -482,7 +482,9 @@ export default function ConfessionsPage() {
       <header style={{
         flexShrink: 0, padding: '14px 20px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-overlay)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        position: 'sticky', top: 0, zIndex: 50,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Link href="/" style={{ color: 'var(--text-faint)', display: 'flex', textDecoration: 'none' }}>

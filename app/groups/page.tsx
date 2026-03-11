@@ -199,9 +199,10 @@ export default function GroupsPage() {
         {/* Header */}
         <header style={{
           flexShrink: 0, height: '60px', padding: '0 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--border-color)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          background: 'var(--bg-overlay)', backdropFilter: 'blur(12px)',
+          backgroundColor: 'var(--bg-overlay)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          position: 'sticky', top: 0, zIndex: 50,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button onClick={handleLeave} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: '4px' }}>
