@@ -68,7 +68,7 @@
       ".read": false,
       "$reportId": {
         ".write": "auth != null",
-        ".validate": "newData.hasChildren(['reportedBy', 'reportedUser', 'chatId', 'reason', 'timestamp'])"
+        ".validate": "newData.hasChildren(['reportedAt', 'reporterUid'])"
       }
     },
 
@@ -132,7 +132,7 @@
         },
         "comments": {
           "$commentId": {
-            ".write": "auth != null",
+            ".write": "auth != null && (!root.child('userMeta').child(auth.uid).child('lastCommentAt').exists() || (now - root.child('userMeta').child(auth.uid).child('lastCommentAt').val()) > 6000)",
             ".validate": "newData.hasChildren(['text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 200"
           }
         }
@@ -162,6 +162,16 @@
       "onlineCount": {
         ".read": true,
         ".write": false
+      }
+    },
+
+    "userMeta": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "lastCommentAt": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber() && newData.val() <= now"
+        }
       }
     },
 

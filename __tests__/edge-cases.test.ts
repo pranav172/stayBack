@@ -5,6 +5,9 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Make this file a module so locals don't conflict with other test files
+export {}
+
 // localStorage polyfill for Node test environment
 const _store: Record<string, string> = {}
 const localStorage = {
@@ -200,5 +203,39 @@ describe('PWA', () => {
   it('does not crash if serviceWorker is unavailable', () => {
     const nav: Record<string, unknown> = {}
     expect(() => { if ('serviceWorker' in nav) { /**/ } }).not.toThrow()
+  })
+})
+
+describe('Comment Rate Limit (server-side rule logic)', () => {
+  /** Mirrors the Firebase security rule:
+   *  !lastCommentAt.exists() || (now - lastCommentAt.val()) > 6000
+   */
+  function canComment(lastCommentAt: number | null, now: number): boolean {
+    if (lastCommentAt === null) return true
+    return (now - lastCommentAt) > 6000
+  }
+
+  it('allows first comment (no lastCommentAt)', () => {
+    expect(canComment(null, Date.now())).toBe(true)
+  })
+
+  it('blocks comment posted within 6 seconds', () => {
+    const now = Date.now()
+    expect(canComment(now - 3000, now)).toBe(false)
+  })
+
+  it('allows comment posted after exactly 6001ms', () => {
+    const now = Date.now()
+    expect(canComment(now - 6001, now)).toBe(true)
+  })
+
+  it('blocks comment at exactly 6000ms (boundary — exclusive)', () => {
+    const now = Date.now()
+    expect(canComment(now - 6000, now)).toBe(false)
+  })
+
+  it('allows comment after a long pause', () => {
+    const now = Date.now()
+    expect(canComment(now - 60000, now)).toBe(true)
   })
 })

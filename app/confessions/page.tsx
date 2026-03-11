@@ -83,30 +83,24 @@ function SwipeCard({
     const result = moderateMessage(commentText)
     if (!result.isClean) return
 
-    // Comment rate limit: max 10 per 10 minutes per device
-    const RL_KEY = 'mujanon_comment_rl'
-    const now = Date.now()
-    const raw = localStorage.getItem(RL_KEY)
-    const rl = raw ? JSON.parse(raw) : { count: 0, resetAt: now + 10 * 60 * 1000 }
-    if (now > rl.resetAt) {
-      localStorage.setItem(RL_KEY, JSON.stringify({ count: 1, resetAt: now + 10 * 60 * 1000 }))
-    } else if (rl.count >= 10) {
-      const minsLeft = Math.ceil((rl.resetAt - now) / 60000)
-      setCommentText(`⏳ Slow down! Try again in ${minsLeft}m`)
-      setTimeout(() => setCommentText(''), 2000)
-      return
-    } else {
-      localStorage.setItem(RL_KEY, JSON.stringify({ ...rl, count: rl.count + 1 }))
-    }
-
     const text = commentText.trim()
     setCommentText('')
     try {
+      // Update rate-limit sentinel — Firebase security rule reads this to enforce 6s cooldown
+      await set(ref(database, `userMeta/${user.uid}/lastCommentAt`), Date.now())
       await push(ref(database, `confessions/${confession.id}/comments`), {
         text,
         timestamp: Date.now(),
       })
-    } catch (e) { console.error('Comment failed:', e) }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : ''
+      if (msg.includes('PERMISSION_DENIED')) {
+        setCommentText('⏳ Slow down! Wait a few seconds.')
+        setTimeout(() => setCommentText(''), 2200)
+      } else {
+        console.error('Comment failed:', e)
+      }
+    }
   }
 
   const handleReport = async () => {
