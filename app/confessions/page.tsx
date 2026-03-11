@@ -208,7 +208,7 @@ function SwipeCard({
           <p style={{
             fontSize: 'clamp(18px, 4vw, 24px)', fontWeight: 500, lineHeight: 1.55,
             color: 'var(--text-primary)', margin: 0, textAlign: 'center',
-            letterSpacing: '-0.01em', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+            letterSpacing: '-0.01em', wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap',
           }}>
             &ldquo;{confession.text}&rdquo;
           </p>
@@ -614,17 +614,19 @@ export default function ConfessionsPage() {
           disabled={postLimitReached}
           title={postLimitReached ? '3 confessions posted today' : 'Write a confession'}
           style={{
-            position: 'fixed', bottom: 'max(env(safe-area-inset-bottom, 28px), 32px)', right: '20px', zIndex: 9999,
-            width: '60px', height: '60px', borderRadius: '50%', border: 'none',
+            position: 'fixed', bottom: '32px', right: '20px', zIndex: 9999,
+            width: '72px', height: '72px', minWidth: '72px', minHeight: '72px',
+            borderRadius: '50%', border: 'none', padding: 0,
             background: postLimitReached
               ? 'rgba(255,255,255,0.08)'
               : 'linear-gradient(135deg, #f59e0b, #fbbf24)',
-            boxShadow: postLimitReached ? 'none' : '0 8px 24px rgba(245,158,11,0.45)',
+            boxShadow: postLimitReached ? 'none' : '0 8px 32px rgba(245,158,11,0.5)',
             cursor: postLimitReached ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all 0.2s',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
+            WebkitAppearance: 'none', appearance: 'none',
           }}
         >
           <Edit3 size={22} color={postLimitReached ? 'var(--text-faint)' : '#000'} />

@@ -756,7 +756,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               >
                 {/* Bubble + reaction picker trigger */}
                 <div style={{ position: 'relative' }} onClick={() => !chatEnded && setShowReactionPicker(showReactionPicker === msg.id ? null : msg.id)}>
-                  <div style={{ maxWidth: '80%', padding: '10px 16px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: '15px', lineHeight: 1.5, wordBreak: 'break-word', cursor: 'pointer', ...bgStyle }}>
+                  <div style={{ maxWidth: '80%', padding: '10px 16px', borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: '15px', lineHeight: 1.5, overflowWrap: 'break-word', whiteSpace: 'pre-wrap', cursor: 'pointer', ...bgStyle }}>
                     {msg.text}
                     {isMe && !isSocial && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '6px', opacity: 0.7 }}>
