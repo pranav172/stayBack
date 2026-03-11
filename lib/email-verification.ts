@@ -32,7 +32,7 @@ const VALID_EMAIL_DOMAIN = '@muj.manipal.edu'
  * Must be registered in Firebase Console → Authentication → Authorized domains.
  */
 const getActionCodeSettings = (): ActionCodeSettings => ({
-  url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://mujanon.vercel.app'}/verify-email`,
+  url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://stay-back.vercel.app'}/verify-email`,
   handleCodeInApp: true,
 })
 
