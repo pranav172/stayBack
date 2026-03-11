@@ -1,7 +1,7 @@
 // Service Worker for mujAnon PWA
 // Provides offline splash + FCM push notification handling
 
-const CACHE_NAME = 'mujanon-v1'
+const CACHE_NAME = 'mujanon-v2'
 const OFFLINE_URL = '/offline.html'
 
 // Shell assets to cache
