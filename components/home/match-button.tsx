@@ -59,7 +59,7 @@ function ShareNudge() {
       border: '1px solid rgba(245,158,11,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
     }}>
-      <p style={{ fontSize: '12px', color: '#a1a1aa', margin: 0 }}>
+      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
         👋 You&apos;re the first one here — invite a friend!
       </p>
       <button
@@ -380,8 +380,8 @@ function MatchButtonInner() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldCheck size={15} style={{ color: isVerified ? '#10b981' : '#71717a' }} />
-              <span style={{ fontSize: '12px', color: '#a1a1aa' }}>Verified MUJ only</span>
+              <ShieldCheck size={15} style={{ color: isVerified ? '#10b981' : 'var(--text-muted)' }} />
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Verified MUJ only</span>
             </div>
             <button
               onClick={() => setVerifiedOnly(!verifiedOnly)}

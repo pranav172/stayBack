@@ -19,18 +19,11 @@ interface Reply {
   timestamp: number
 }
 
-interface Comment {
-  id: string
-  text: string
-  timestamp: number
-}
-
 interface Confession {
   id: string
   text: string
   timestamp: number
   hearts: number
-  comments?: Record<string, Comment>
   replies?: Record<string, Reply>
   expiresAt?: number
 }
@@ -61,9 +54,6 @@ function SwipeCard({
   const startX = useRef(0)
   const currentX = useRef(0)
   const isDragging = useRef(false)
-  const [showComments, setShowComments] = useState(false)
-  const [commentText, setCommentText] = useState('')
-  const [comments, setComments] = useState<Comment[]>([])
   const [showReply, setShowReply] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [replies, setReplies] = useState<Reply[]>([])
@@ -72,21 +62,6 @@ function SwipeCard({
   const [reported, setReported] = useState(false)
   const [reportToast, setReportToast] = useState(false)
   const { userId } = useConnection()
-
-  // Real-time comments
-  useEffect(() => {
-    if (!confession.id) return
-    const commentsRef = ref(database, `confessions/${confession.id}/comments`)
-    const unsub = onValue(commentsRef, (snap) => {
-      if (!snap.exists()) { setComments([]); return }
-      const list = Object.entries(snap.val()).map(([id, v]) => ({
-        id,
-        ...(v as Omit<Comment, 'id'>),
-      })).sort((a, b) => a.timestamp - b.timestamp)
-      setComments(list)
-    })
-    return () => unsub()
-  }, [confession.id])
 
   // Real-time replies
   useEffect(() => {
@@ -102,32 +77,6 @@ function SwipeCard({
     })
     return () => unsub()
   }, [confession.id])
-
-  const handleCommentSubmit = async () => {
-    const user = auth.currentUser
-    if (!commentText.trim() || !user) return
-    const result = moderateMessage(commentText)
-    if (!result.isClean) return
-
-    const text = commentText.trim()
-    setCommentText('')
-    try {
-      // Update rate-limit sentinel — Firebase security rule reads this to enforce 6s cooldown
-      await set(ref(database, `userMeta/${user.uid}/lastCommentAt`), Date.now())
-      await push(ref(database, `confessions/${confession.id}/comments`), {
-        text,
-        timestamp: Date.now(),
-      })
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : ''
-      if (msg.includes('PERMISSION_DENIED')) {
-        setCommentText('⏳ Slow down! Wait a few seconds.')
-        setTimeout(() => setCommentText(''), 2200)
-      } else {
-        console.error('Comment failed:', e)
-      }
-    }
-  }
 
   const handleReplySubmit = async () => {
     const user = auth.currentUser
@@ -176,7 +125,7 @@ function SwipeCard({
 
   // — Touch / Pointer drag —————————————————————————————
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!isTop || showComments) return
+    if (!isTop || showReply) return
     isDragging.current = true
     startX.current = e.clientX
     currentX.current = e.clientX
@@ -194,17 +143,16 @@ function SwipeCard({
     if (!isDragging.current) return
     isDragging.current = false
     const delta = currentX.current - startX.current
-    if (delta > 80) { onLike(); setDragDelta(0) }
-    else if (delta < -80) { onSkip(); setDragDelta(0) }
+    if (delta > 80) { onSkip(); setDragDelta(0) }
+    else if (delta < -80) { setShowReply(true); setDragDelta(0) }
     else setDragDelta(0)
   }
 
   const rotation = dragDelta / 15
   const opacity = Math.max(0.6, 1 - Math.abs(dragDelta) / 400)
-  const likeOpacity = Math.min(1, dragDelta / 80)
-  const skipOpacity = Math.min(1, -dragDelta / 80)
+  const skipOpacity = Math.max(0, dragDelta / 80)
+  const replyOpacity = Math.max(0, -dragDelta / 80)
 
-  const commentCount = comments.length
   const replyCount = replies.length
 
   if (!isTop) {
@@ -237,21 +185,21 @@ function SwipeCard({
     >
       {/* Card body */}
       <div style={{
-        flex: 1, backgroundColor: 'rgba(22,22,32,0.98)',
+        flex: 1, backgroundColor: 'var(--bg-card)',
         borderRadius: '24px',
         border: '1px solid rgba(255,255,255,0.1)',
         boxShadow: `0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)`,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        {/* Like / Skip overlays */}
-        {likeOpacity > 0.05 && (
-          <div style={{ position: 'absolute', top: '24px', left: '24px', zIndex: 10, border: '3px solid #10b981', borderRadius: '10px', padding: '6px 14px', opacity: likeOpacity }}>
-            <span style={{ color: '#10b981', fontWeight: 800, fontSize: '22px', letterSpacing: '2px' }}>LIKE</span>
+        {/* Skip / Reply overlays */}
+        {skipOpacity > 0.05 && (
+          <div style={{ position: 'absolute', top: '24px', left: '24px', zIndex: 10, border: '3px solid #ef4444', borderRadius: '10px', padding: '6px 14px', opacity: skipOpacity }}>
+            <span style={{ color: '#ef4444', fontWeight: 800, fontSize: '22px', letterSpacing: '2px' }}>SKIP</span>
           </div>
         )}
-        {skipOpacity > 0.05 && (
-          <div style={{ position: 'absolute', top: '24px', right: '24px', zIndex: 10, border: '3px solid #ef4444', borderRadius: '10px', padding: '6px 14px', opacity: skipOpacity }}>
-            <span style={{ color: '#ef4444', fontWeight: 800, fontSize: '22px', letterSpacing: '2px' }}>SKIP</span>
+        {replyOpacity > 0.05 && (
+          <div style={{ position: 'absolute', top: '24px', right: '24px', zIndex: 10, border: '3px solid #6366f1', borderRadius: '10px', padding: '6px 14px', opacity: replyOpacity }}>
+            <span style={{ color: '#6366f1', fontWeight: 800, fontSize: '22px', letterSpacing: '2px' }}>REPLY</span>
           </div>
         )}
 
@@ -259,8 +207,8 @@ function SwipeCard({
         <div style={{ flex: 1, padding: '32px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <p style={{
             fontSize: 'clamp(18px, 4vw, 24px)', fontWeight: 500, lineHeight: 1.55,
-            color: '#e4e4e7', margin: 0, textAlign: 'center',
-            letterSpacing: '-0.01em',
+            color: 'var(--text-primary)', margin: 0, textAlign: 'center',
+            letterSpacing: '-0.01em', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'pre-wrap',
           }}>
             &ldquo;{confession.text}&rdquo;
           </p>
@@ -272,7 +220,7 @@ function SwipeCard({
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '11px', color: '#52525b' }}>{timeAgo(confession.timestamp)}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{timeAgo(confession.timestamp)}</span>
             {confession.expiresAt && (() => {
               const msLeft = confession.expiresAt - Date.now()
               const hLeft = Math.max(0, Math.floor(msLeft / 3600000))
@@ -288,31 +236,11 @@ function SwipeCard({
             })()}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Reply count badge */}
-            {replyCount > 0 && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowReply(true) }}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', padding: '4px', fontSize: '12px' }}
-              >
-                <Send size={11} />
-                {replyCount}
-              </button>
-            )}
-            {/* Comment count badge */}
-            {commentCount > 0 && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowComments(true) }}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', padding: '4px', fontSize: '12px' }}
-              >
-                <MessageCircle size={13} />
-                {commentCount}
-              </button>
-            )}
             {/* Share */}
             <button
               onClick={(e) => { e.stopPropagation(); handleShareConfession() }}
               title="Share confession"
-              style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#52525b', padding: '4px' }}
+              style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', padding: '4px' }}
             >
               <Share2 size={13} />
             </button>
@@ -320,31 +248,25 @@ function SwipeCard({
             <button
               onClick={(e) => { e.stopPropagation(); handleReport() }}
               title={reported ? 'Reported' : 'Report confession'}
-              style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: reported ? 'default' : 'pointer', color: reported ? '#ef4444' : '#52525b', padding: '4px' }}
+              style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: reported ? 'default' : 'pointer', color: reported ? '#ef4444' : 'var(--text-faint)', padding: '4px' }}
             >
               <Flag size={13} style={{ fill: reported ? '#ef4444' : 'none' }} />
             </button>
-            {/* Hearts */}
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: hearted ? '#ef4444' : '#71717a' }}>
-              <Heart size={14} style={{ fill: hearted ? '#ef4444' : 'none', color: hearted ? '#ef4444' : '#71717a' }} />
+            {/* Hearts (Like) */}
+            <button 
+              onClick={(e) => { e.stopPropagation(); onLike() }}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: hearted ? '#ef4444' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+              <Heart size={14} style={{ fill: hearted ? '#ef4444' : 'none', color: hearted ? '#ef4444' : 'var(--text-muted)' }} />
               {confession.hearts || 0}
-            </span>
-            {/* Reply button — always visible */}
+            </button>
+            {/* Reply toggle */}
             <button
               onClick={(e) => { e.stopPropagation(); setShowReply(!showReply) }}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: showReply ? '#6366f1' : '#71717a', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-            >
-              <Send size={13} />
-              {replyCount > 0 ? replyCount : 'Reply'}
-            </button>
-            {/* Comments */}
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowComments(!showComments) }}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: showComments ? '#f59e0b' : '#71717a', background: 'none', border: 'none', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: showReply ? '#6366f1' : 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
             >
               <MessageCircle size={14} />
-              {commentCount > 0 ? commentCount : ''}
-              {showComments ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {replyCount > 0 ? replyCount : 'Reply'}
+              {showReply ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
           </div>
         </div>
@@ -361,52 +283,24 @@ function SwipeCard({
           </div>
         )}
 
-        {/* Comments panel */}
-        {showComments && (
-          <div style={{
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            backgroundColor: 'rgba(15,15,22,0.9)',
-            maxHeight: '220px', display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {comments.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#52525b', fontSize: '12px', padding: '12px' }}>No comments yet. Be the first!</p>
-              ) : comments.map(c => (
-                <div key={c.id} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '8px 12px' }}>
-                  <p style={{ color: '#d4d4d8', fontSize: '13px', margin: '0 0 2px' }}>{c.text}</p>
-                  <span style={{ fontSize: '10px', color: '#52525b' }}>{timeAgo(c.timestamp)}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '8px' }}>
-              <input
-                type="text" value={commentText}
-                onChange={e => setCommentText(e.target.value.slice(0, 200))}
-                onKeyDown={e => e.key === 'Enter' && handleCommentSubmit()}
-                placeholder="Add a comment..."
-                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px', padding: '8px 14px', color: '#e4e4e7', fontSize: '13px', outline: 'none' }}
-              />
-              <button onClick={handleCommentSubmit} disabled={!commentText.trim() || !userId} style={{ padding: '8px 12px', borderRadius: '20px', background: commentText.trim() ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : 'rgba(255,255,255,0.08)', border: 'none', cursor: commentText.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center' }}>
-                <Send size={14} color={commentText.trim() ? '#000' : '#52525b'} />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Reply panel */}
         {showReply && (
           <div style={{
             borderTop: '1px solid rgba(99,102,241,0.2)',
-            backgroundColor: 'rgba(10,10,20,0.95)',
-            maxHeight: '220px', display: 'flex', flexDirection: 'column',
+            backgroundColor: 'var(--bg-overlay)',
+            maxHeight: '260px', display: 'flex', flexDirection: 'column',
           }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {replies.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#52525b', fontSize: '12px', padding: '12px' }}>No replies yet. Be the first!</p>
+                <p style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: '12px', padding: '12px' }}>No replies yet. Be the first!</p>
               ) : replies.map(r => (
-                <div key={r.id} style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: '10px', padding: '8px 12px', borderLeft: '2px solid rgba(99,102,241,0.4)' }}>
-                  <p style={{ color: '#d4d4d8', fontSize: '13px', margin: '0 0 2px' }}>{r.text}</p>
-                  <span style={{ fontSize: '10px', color: '#52525b' }}>{timeAgo(r.timestamp)}</span>
+                <div 
+                  key={r.id} 
+                  onClick={() => setReplyText(prev => prev.includes('@Anon') ? prev : `@Anon ${prev}`)}
+                  style={{ cursor: 'pointer', backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: '10px', padding: '8px 12px', borderLeft: '2px solid rgba(99,102,241,0.4)', transition: 'background-color 0.2s' }}
+                >
+                  <p style={{ color: 'var(--text-primary)', fontSize: '13px', margin: '0 0 2px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{r.text}</p>
+                  <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>{timeAgo(r.timestamp)}</span>
                 </div>
               ))}
             </div>
@@ -416,14 +310,14 @@ function SwipeCard({
                 onChange={e => setReplyText(e.target.value.slice(0, 200))}
                 onKeyDown={e => e.key === 'Enter' && handleReplySubmit()}
                 placeholder="Reply anonymously..."
-                style={{ flex: 1, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '8px 14px', color: '#e4e4e7', fontSize: '13px', outline: 'none' }}
+                style={{ flex: 1, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '8px 14px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
               />
               <button
                 onClick={handleReplySubmit}
                 disabled={!replyText.trim() || submittingReply}
                 style={{ padding: '8px 12px', borderRadius: '20px', background: replyText.trim() ? 'linear-gradient(135deg,#6366f1,#818cf8)' : 'rgba(255,255,255,0.08)', border: 'none', cursor: replyText.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center' }}
               >
-                {submittingReply ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} color={replyText.trim() ? '#fff' : '#52525b'} />}
+                {submittingReply ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} color={replyText.trim() ? '#fff' : 'var(--text-faint)'} />}
               </button>
             </div>
           </div>
@@ -581,7 +475,7 @@ export default function ConfessionsPage() {
 
   return (
     <div style={{
-      height: '100dvh', backgroundColor: '#0a0a12',
+      height: '100dvh', backgroundColor: 'var(--bg-primary)',
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       {/* Header */}
@@ -591,12 +485,12 @@ export default function ConfessionsPage() {
         borderBottom: '1px solid rgba(255,255,255,0.06)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/" style={{ color: '#52525b', display: 'flex', textDecoration: 'none' }}>
+          <Link href="/" style={{ color: 'var(--text-faint)', display: 'flex', textDecoration: 'none' }}>
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 style={{ fontSize: '15px', fontWeight: 700, color: '#e4e4e7', margin: 0 }}>🕯️ Confession Wall</h1>
-            <p style={{ fontSize: '11px', color: '#52525b', margin: 0 }}>Anonymous · 48h · Swipe to explore</p>
+            <h1 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>🕯️ Confession Wall</h1>
+            <p style={{ fontSize: '11px', color: 'var(--text-faint)', margin: 0 }}>Anonymous · 48h · Swipe to explore</p>
           </div>
         </div>
         {/* Count badge */}
@@ -623,8 +517,8 @@ export default function ConfessionsPage() {
             style={{
               padding: '6px 18px', borderRadius: '16px', fontSize: '12px', fontWeight: 600,
               border: sortMode === mode ? 'none' : '1px solid rgba(255,255,255,0.08)',
-              background: sortMode === mode ? 'linear-gradient(135deg,#f59e0b,#fbbf24)' : 'rgba(255,255,255,0.04)',
-              color: sortMode === mode ? '#000' : '#71717a',
+              background: sortMode === mode ? 'linear-gradient(135deg,#f59e0b,#fbbf24)' : 'var(--border-subtle)',
+              color: sortMode === mode ? '#000' : 'var(--text-muted)',
               cursor: 'pointer', transition: 'all 0.15s',
             }}
           >
@@ -635,15 +529,15 @@ export default function ConfessionsPage() {
       {/* Swipe area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: '20px' }}>
         {confessions.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#52525b' }}>
+          <div style={{ textAlign: 'center', color: 'var(--text-faint)' }}>
             <div style={{ fontSize: '48px', marginBottom: '12px' }}>🕯️</div>
-            <p style={{ fontSize: '16px', color: '#71717a' }}>No confessions yet.</p>
+            <p style={{ fontSize: '16px', color: 'var(--text-muted)' }}>No confessions yet.</p>
             <p style={{ fontSize: '13px', marginTop: '6px' }}>Be the first to share something anonymously.</p>
           </div>
         ) : done ? (
-          <div style={{ textAlign: 'center', color: '#52525b' }}>
+          <div style={{ textAlign: 'center', color: 'var(--text-faint)' }}>
             <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
-            <p style={{ fontSize: '16px', color: '#71717a' }}>You&apos;ve seen everything!</p>
+            <p style={{ fontSize: '16px', color: 'var(--text-muted)' }}>You&apos;ve seen everything!</p>
             <button onClick={() => setCurrentIndex(0)} style={{ marginTop: '16px', padding: '10px 24px', borderRadius: '20px', background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', border: 'none', color: '#000', fontWeight: 600, cursor: 'pointer' }}>
               Start over
             </button>
@@ -729,7 +623,7 @@ export default function ConfessionsPage() {
             transition: 'all 0.2s',
           }}
         >
-          <Edit3 size={22} color={postLimitReached ? '#52525b' : '#000'} />
+          <Edit3 size={22} color={postLimitReached ? 'var(--text-faint)' : '#000'} />
         </button>
       )}
       {showCompose && (
@@ -747,8 +641,8 @@ export default function ConfessionsPage() {
               paddingBottom: '32px',
             }}
           >
-            <div style={{ width: '40px', height: '4px', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: '2px', margin: '0 auto 20px' }} />
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#e4e4e7', marginBottom: '16px', textAlign: 'center' }}>
+            <div style={{ width: '40px', height: '4px', backgroundColor: 'var(--border-strong)', borderRadius: '2px', margin: '0 auto 20px' }} />
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px', textAlign: 'center' }}>
               🕯️ Confess Anonymously
             </h3>
             <textarea
@@ -757,9 +651,9 @@ export default function ConfessionsPage() {
               placeholder="What's on your mind... no names, no judgment"
               autoFocus
               style={{
-                width: '100%', minHeight: '100px', backgroundColor: 'rgba(255,255,255,0.05)',
+                width: '100%', minHeight: '100px', backgroundColor: 'var(--border-subtle)',
                 border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px',
-                padding: '14px', color: '#e4e4e7', fontSize: '15px', lineHeight: 1.5,
+                padding: '14px', color: 'var(--text-primary)', fontSize: '15px', lineHeight: 1.5,
                 resize: 'none', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
               }}
             />
@@ -767,7 +661,7 @@ export default function ConfessionsPage() {
               <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '8px', textAlign: 'center' }}>{postError}</p>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-              <span style={{ fontSize: '12px', color: text.length > 250 ? '#ef4444' : '#52525b' }}>
+              <span style={{ fontSize: '12px', color: text.length > 250 ? '#ef4444' : 'var(--text-faint)' }}>
                 {text.length}/{MAX_CHARS}
               </span>
               <button
@@ -776,7 +670,7 @@ export default function ConfessionsPage() {
                 style={{
                   padding: '10px 24px', borderRadius: '20px', fontWeight: 600, fontSize: '14px',
                   background: text.trim() && authReady ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : 'rgba(255,255,255,0.08)',
-                  border: 'none', color: text.trim() && authReady ? '#000' : '#52525b',
+                  border: 'none', color: text.trim() && authReady ? '#000' : 'var(--text-faint)',
                   cursor: text.trim() && authReady ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', gap: '6px',
                 }}

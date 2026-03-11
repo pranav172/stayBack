@@ -195,24 +195,24 @@ export default function GroupsPage() {
   // ── Active Room Chat ────────────────────────────────────────────────────────────────────────
   if (activeRoomId) {
     return (
-      <div style={{ height: '100dvh', backgroundColor: '#0a0a12', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: '100dvh', backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <header style={{
           flexShrink: 0, height: '60px', padding: '0 16px',
           borderBottom: '1px solid rgba(255,255,255,0.07)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          background: 'rgba(10,10,18,0.97)', backdropFilter: 'blur(12px)',
+          background: 'var(--bg-overlay)', backdropFilter: 'blur(12px)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button onClick={handleLeave} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#52525b', display: 'flex', padding: '4px' }}>
+            <button onClick={handleLeave} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', display: 'flex', padding: '4px' }}>
               <ArrowLeft size={20} />
             </button>
             <div style={{ width: '1px', height: '20px', backgroundColor: 'rgba(255,255,255,0.08)' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '20px' }}>👥</span>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#e4e4e7' }}>Group Room</div>
-                <div style={{ fontSize: '11px', color: '#52525b' }}>{memberCount}/{MAX_GROUP_SIZE} members · 30 min</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Group Room</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{memberCount}/{MAX_GROUP_SIZE} members · 30 min</div>
               </div>
             </div>
           </div>
@@ -235,23 +235,23 @@ export default function GroupsPage() {
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, maxWidth: '640px', width: '100%', margin: '0 auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {messages.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#52525b', textAlign: 'center', gap: '12px', padding: '60px 0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', textAlign: 'center', gap: '12px', padding: '60px 0' }}>
               <div style={{ fontSize: '48px' }}>👋</div>
-              <p style={{ color: '#71717a', fontSize: '15px' }}>Room&apos;s ready! Waiting for others...</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>Room&apos;s ready! Waiting for others...</p>
               <p style={{ fontSize: '12px' }}>Anyone can join until it&apos;s full.</p>
             </div>
           ) : messages.map(msg => {
             const isMe = msg.senderId === (auth.currentUser?.uid || userId)
             const labelChar = (msg.senderLabel || 'User ?').replace('User ', '')
-            const color = LABEL_COLORS[labelChar] || '#71717a'
+            const color = LABEL_COLORS[labelChar] || 'var(--text-muted)'
             return (
               <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                 {!isMe && <span style={{ fontSize: '11px', color, marginBottom: '4px', fontWeight: 600 }}>{msg.senderLabel}</span>}
                 <div style={{
                   maxWidth: '72%', padding: '10px 16px',
                   borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                  backgroundColor: isMe ? color : 'rgba(255,255,255,0.07)',
-                  color: isMe ? '#000' : '#e4e4e7',
+                  backgroundColor: isMe ? color : 'var(--border-color)',
+                  color: isMe ? '#000' : 'var(--text-primary)',
                   fontSize: '14px', lineHeight: 1.5, wordBreak: 'break-word',
                   border: isMe ? 'none' : '1px solid rgba(255,255,255,0.09)',
                   boxShadow: isMe ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
@@ -267,15 +267,15 @@ export default function GroupsPage() {
         </div>
 
         {/* Input */}
-        <div style={{ flexShrink: 0, padding: '12px 16px 28px', borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(10,10,18,0.97)', backdropFilter: 'blur(12px)' }}>
+        <div style={{ flexShrink: 0, padding: '12px 16px 28px', borderTop: '1px solid rgba(255,255,255,0.07)', background: 'var(--bg-overlay)', backdropFilter: 'blur(12px)' }}>
           <form onSubmit={e => { e.preventDefault(); handleSend() }} style={{ display: 'flex', gap: '10px', maxWidth: '640px', margin: '0 auto', alignItems: 'center' }}>
             <input
               type="text" value={inputText} onChange={e => setInputText(e.target.value)}
               placeholder="Say something..."
               style={{
-                flex: 1, backgroundColor: 'rgba(255,255,255,0.07)',
+                flex: 1, backgroundColor: 'var(--border-color)',
                 border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px',
-                padding: '12px 20px', fontSize: '14px', color: '#e4e4e7',
+                padding: '12px 20px', fontSize: '14px', color: 'var(--text-primary)',
                 outline: 'none', fontFamily: 'inherit',
               }}
             />
@@ -287,7 +287,7 @@ export default function GroupsPage() {
               boxShadow: inputText.trim() ? '0 4px 12px rgba(245,158,11,0.3)' : 'none',
               transition: 'all 0.2s',
             }}>
-              <Send size={18} color={inputText.trim() ? '#000' : '#52525b'} />
+              <Send size={18} color={inputText.trim() ? '#000' : 'var(--text-faint)'} />
             </button>
           </form>
         </div>
@@ -297,21 +297,21 @@ export default function GroupsPage() {
 
   // ── Room Browser ──────────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: '#0a0a12', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100dvh', backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 10,
         padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)',
-        background: 'rgba(10,10,18,0.97)', backdropFilter: 'blur(12px)',
+        background: 'var(--bg-overlay)', backdropFilter: 'blur(12px)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/" style={{ color: '#52525b', display: 'flex', textDecoration: 'none' }}>
+          <Link href="/" style={{ color: 'var(--text-faint)', display: 'flex', textDecoration: 'none' }}>
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 style={{ fontSize: '15px', fontWeight: 700, color: '#e4e4e7', margin: 0 }}>👥 Group Rooms</h1>
-            <p style={{ fontSize: '11px', color: '#52525b', margin: 0 }}>Up to 4 people · 30 min</p>
+            <h1 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>👥 Group Rooms</h1>
+            <p style={{ fontSize: '11px', color: 'var(--text-faint)', margin: 0 }}>Up to 4 people · 30 min</p>
           </div>
         </div>
         <ThemeToggle />
@@ -330,7 +330,7 @@ export default function GroupsPage() {
           style={{
             width: '100%', padding: '18px', borderRadius: '16px',
             background: authReady ? 'linear-gradient(135deg, #f59e0b, #fbbf24)' : 'rgba(255,255,255,0.08)',
-            border: 'none', color: authReady ? '#000' : '#71717a', fontWeight: 700, fontSize: '16px',
+            border: 'none', color: authReady ? '#000' : 'var(--text-muted)', fontWeight: 700, fontSize: '16px',
             cursor: joining || !authReady ? 'not-allowed' : 'pointer', marginBottom: '28px',
             boxShadow: authReady ? '0 8px 30px rgba(245,158,11,0.3)' : 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
@@ -351,18 +351,18 @@ export default function GroupsPage() {
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#52525b' }}>Loading rooms...</div>
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-faint)' }}>Loading rooms...</div>
         ) : rooms.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 20px', color: '#52525b' }}>
+          <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-faint)' }}>
             <div style={{ fontSize: '48px', marginBottom: '14px' }}>🚪</div>
-            <p style={{ color: '#71717a', fontSize: '16px' }}>No rooms open right now.</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '16px' }}>No rooms open right now.</p>
             <p style={{ fontSize: '13px', marginTop: '6px' }}>Tap the button above to start one!</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {rooms.map(r => (
               <div key={r.id} onClick={joinOrCreateRoom} style={{
-                backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '14px',
+                backgroundColor: 'var(--border-subtle)', borderRadius: '14px',
                 border: '1px solid rgba(255,255,255,0.08)', padding: '16px',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 cursor: 'pointer', transition: 'all 0.2s',
@@ -370,17 +370,17 @@ export default function GroupsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>👥</div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#e4e4e7' }}>Anonymous Room</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Anonymous Room</div>
                     <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
                       {Array.from({ length: MAX_GROUP_SIZE }).map((_, i) => (
-                        <div key={i} style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: i < r.memberCount ? '#f59e0b' : 'rgba(255,255,255,0.1)' }} />
+                        <div key={i} style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: i < r.memberCount ? '#f59e0b' : 'var(--border-color)' }} />
                       ))}
                     </div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 600 }}>{MAX_GROUP_SIZE - r.memberCount} spot{MAX_GROUP_SIZE - r.memberCount !== 1 ? 's' : ''} left</div>
-                  <div style={{ fontSize: '11px', color: '#52525b', marginTop: '2px' }}>{r.memberCount}/{MAX_GROUP_SIZE} joined</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '2px' }}>{r.memberCount}/{MAX_GROUP_SIZE} joined</div>
                 </div>
               </div>
             ))}

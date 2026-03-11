@@ -6,47 +6,32 @@ import { Sun, Moon, Monitor } from 'lucide-react'
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
 
-  const options = [
-    { value: 'light' as const, icon: Sun, label: 'Light' },
-    { value: 'dark' as const, icon: Moon, label: 'Dark' },
-    { value: 'system' as const, icon: Monitor, label: 'System' },
-  ]
+  const toggleTheme = () => {
+    if (theme === 'dark') setTheme('light')
+    else if (theme === 'light') setTheme('system')
+    else setTheme('dark')
+  }
+
+  const Icon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: '4px',
-      padding: '4px',
-      backgroundColor: 'var(--bg-surface)',
-      borderRadius: '12px',
-      border: '1px solid var(--border-color)',
-    }}>
-      {options.map((option) => {
-        const Icon = option.icon
-        const isActive = theme === option.value
-        
-        return (
-          <button
-            key={option.value}
-            onClick={() => setTheme(option.value)}
-            title={option.label}
-            style={{
-              padding: '8px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: isActive ? 'var(--accent-primary)' : 'transparent',
-              color: isActive ? '#ffffff' : 'var(--text-muted)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <Icon size={16} />
-          </button>
-        )
-      })}
-    </div>
+    <button
+      onClick={toggleTheme}
+      title="Toggle theme"
+      style={{
+        padding: '8px',
+        borderRadius: '12px',
+        border: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-surface)',
+        color: 'var(--text-primary)',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s ease',
+      }}
+    >
+      <Icon size={16} />
+    </button>
   )
 }

@@ -392,7 +392,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button 
             onClick={handleStop}
-            style={{ padding: '8px', borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ padding: '8px', borderRadius: '50%', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <ArrowLeft size={20} />
           </button>
@@ -404,14 +404,14 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
                 : 'Disconnected'}
             </span>
             {partnerVibeName && partnerOnline && (
-              <span style={{ fontSize: '10px', color: '#52525b', display: 'block' }}>anonymous · mujAnon</span>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block' }}>anonymous · mujAnon</span>
             )}
             {/* Show partner mood if available */}
             {chatMoods && partnerOnline && (() => {
               const partnerMood = chatMoods.user1 === currentUserId ? chatMoods.mood2 : chatMoods.mood1
               const moodEmojis: Record<string, string> = { happy: '😊', curious: '🤔', low: '😢', venting: '😤' }
               return partnerMood ? (
-                <span style={{ fontSize: '11px', color: '#71717a', marginLeft: '6px' }}>{moodEmojis[partnerMood]} {partnerMood}</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>{moodEmojis[partnerMood]} {partnerMood}</span>
               ) : null
             })()}
           </div>
@@ -425,8 +425,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             fontSize: '12px', 
             padding: '6px 12px', 
             borderRadius: '20px',
-            backgroundColor: isTimeWarning ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.05)',
-            color: isTimeWarning ? '#ef4444' : '#71717a'
+            backgroundColor: isTimeWarning ? 'rgba(239, 68, 68, 0.15)' : 'var(--border-subtle)',
+            color: isTimeWarning ? '#ef4444' : 'var(--text-muted)'
           }}>
             <Clock size={12} />
             <span style={{ fontFamily: 'monospace' }}>{formatTimeRemaining(timeRemaining)}</span>
@@ -439,8 +439,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             fontSize: '12px', 
             padding: '6px 12px', 
             borderRadius: '20px',
-            backgroundColor: 'rgba(255,255,255,0.05)',
-            color: '#71717a'
+            backgroundColor: 'var(--border-subtle)',
+            color: 'var(--text-muted)'
           }}>
             <Users size={12} />
             <span>{onlineCount}</span>
@@ -454,7 +454,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               style={{ 
                 padding: '8px', 
                 borderRadius: '50%', 
-                background: showSocialInput === 'insta' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)', 
+                background: showSocialInput === 'insta' ? 'rgba(236, 72, 153, 0.2)' : 'var(--border-subtle)', 
                 border: 'none', 
                 cursor: 'pointer',
                 color: '#ec4899',
@@ -473,7 +473,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
               style={{ 
                 padding: '8px', 
                 borderRadius: '50%', 
-                background: showSocialInput === 'snap' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255,255,255,0.05)', 
+                background: showSocialInput === 'snap' ? 'rgba(234, 179, 8, 0.2)' : 'var(--border-subtle)', 
                 border: 'none', 
                 cursor: 'pointer',
                 color: '#eab308',
@@ -491,10 +491,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             style={{ 
               padding: '8px', 
               borderRadius: '50%', 
-              background: 'rgba(255,255,255,0.05)', 
+              background: 'var(--border-subtle)', 
               border: 'none', 
               cursor: 'pointer',
-              color: '#71717a',
+              color: 'var(--text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -509,10 +509,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             style={{ 
               padding: '6px 12px', 
               borderRadius: '20px', 
-              background: nextButtonDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(245, 158, 11, 0.2)', 
+              background: nextButtonDisabled ? 'var(--border-subtle)' : 'rgba(245, 158, 11, 0.2)', 
               border: 'none', 
               cursor: nextButtonDisabled ? 'not-allowed' : 'pointer',
-              color: nextButtonDisabled ? '#52525b' : '#f59e0b',
+              color: nextButtonDisabled ? 'var(--text-faint)' : '#f59e0b',
               fontSize: '14px',
               fontWeight: 600,
               display: 'flex',
@@ -639,10 +639,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             style={{ 
               padding: '8px', 
               borderRadius: '8px', 
-              backgroundColor: 'rgba(255,255,255,0.1)', 
+              backgroundColor: 'var(--border-color)', 
               border: 'none', 
               cursor: 'pointer',
-              color: '#71717a',
+              color: 'var(--text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
@@ -724,7 +724,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column' }}>
         {messages.length === 0 && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#52525b', fontSize: '14px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: '14px' }}>
             <p>Say hi to your fellow MUJian! 👋</p>
             <p style={{ fontSize: '12px', marginTop: '8px', color: '#3f3f46' }}>Be respectful. Chats can be reported.</p>
           </div>
@@ -746,7 +746,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             } else if (isMe) {
               bgStyle = { background: 'linear-gradient(135deg, #f59e0b, #fbbf24)', color: '#000' }
             } else {
-              bgStyle = { backgroundColor: 'rgba(26, 26, 37, 0.8)', color: '#e4e4e7', border: '1px solid rgba(255,255,255,0.08)' }
+              bgStyle = { backgroundColor: 'rgba(26, 26, 37, 0.8)', color: 'var(--text-primary)', border: '1px solid rgba(255,255,255,0.08)' }
             }
             
             return (
@@ -802,9 +802,9 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
                           onClick={() => handleReact(msg.id, emoji)}
                           style={{
                             fontSize: '11px', padding: '2px 7px', borderRadius: '10px', cursor: 'pointer',
-                            backgroundColor: msg.reactions?.[userId] === emoji ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.06)',
+                            backgroundColor: msg.reactions?.[userId] === emoji ? 'rgba(245,158,11,0.2)' : 'var(--bg-input)',
                             border: msg.reactions?.[userId] === emoji ? '1px solid rgba(245,158,11,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                            color: '#e4e4e7',
+                            color: 'var(--text-primary)',
                           }}
                         >{emoji} {count}</span>
                       ))}
@@ -827,11 +827,11 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <span style={{ color: '#71717a', fontSize: '14px' }}>typing</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>typing</span>
                 <span style={{ display: 'flex', gap: '3px' }}>
-                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#71717a', animation: 'typingBounce 1.2s ease-in-out infinite' }} />
-                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#71717a', animation: 'typingBounce 1.2s ease-in-out 0.2s infinite' }} />
-                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#71717a', animation: 'typingBounce 1.2s ease-in-out 0.4s infinite' }} />
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--text-muted)', animation: 'typingBounce 1.2s ease-in-out infinite' }} />
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--text-muted)', animation: 'typingBounce 1.2s ease-in-out 0.2s infinite' }} />
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--text-muted)', animation: 'typingBounce 1.2s ease-in-out 0.4s infinite' }} />
                 </span>
               </div>
             </div>
@@ -861,7 +861,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
             disabled={!partnerOnline || chatEnded}
             style={{ 
               flex: 1, 
-              backgroundColor: 'rgba(255,255,255,0.05)', 
+              backgroundColor: 'var(--border-subtle)', 
               border: '1px solid rgba(255,255,255,0.1)', 
               borderRadius: '24px', 
               padding: '12px 20px', 
