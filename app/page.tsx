@@ -97,7 +97,7 @@ function FeatureCard({
 }) {
   const [hovered, setHovered] = useState(false)
   return (
-    <Link href={href} style={{ textDecoration: 'none' }}
+    <Link href={href} style={{ textDecoration: 'none', display: 'block', touchAction: 'manipulation' }}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <div style={{
         padding: '16px', borderRadius: '16px',

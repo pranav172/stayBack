@@ -614,8 +614,8 @@ export default function ConfessionsPage() {
           disabled={postLimitReached}
           title={postLimitReached ? '3 confessions posted today' : 'Write a confession'}
           style={{
-            position: 'fixed', bottom: '28px', right: '20px', zIndex: 50,
-            width: '56px', height: '56px', borderRadius: '50%', border: 'none',
+            position: 'fixed', bottom: 'max(env(safe-area-inset-bottom, 28px), 32px)', right: '20px', zIndex: 9999,
+            width: '60px', height: '60px', borderRadius: '50%', border: 'none',
             background: postLimitReached
               ? 'rgba(255,255,255,0.08)'
               : 'linear-gradient(135deg, #f59e0b, #fbbf24)',
@@ -623,6 +623,8 @@ export default function ConfessionsPage() {
             cursor: postLimitReached ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all 0.2s',
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
           }}
         >
           <Edit3 size={22} color={postLimitReached ? 'var(--text-faint)' : '#000'} />
