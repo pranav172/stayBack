@@ -18,6 +18,8 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  signInWithPopup,
+  GoogleAuthProvider,
   ActionCodeSettings,
 } from 'firebase/auth'
 import { ref, set, get, serverTimestamp } from 'firebase/database'
@@ -47,6 +49,52 @@ export function isValidMUJEmail(email: string): boolean {
 
 export function getEmailUsername(email: string): string {
   return email.split('@')[0]
+}
+
+// ── Google Sign-In verification (primary method) ───────────────────────────────
+
+/**
+ * Verify MUJ identity via Google Sign-In.
+ * MUJ students have @muj.manipal.edu Google Workspace accounts.
+ * Firebase verifies the account is real — we just confirm the domain.
+ *
+ * Industry pattern: OAuth domain-restricted sign-in.
+ * No email sending required, works 100% reliably.
+ */
+export async function verifyWithGoogle(): Promise<{ success: boolean; email?: string; error?: string }> {
+  try {
+    const provider = new GoogleAuthProvider()
+    // Hint the domain so Google shows MUJ accounts first
+    provider.setCustomParameters({ hd: 'muj.manipal.edu' })
+
+    const result = await signInWithPopup(auth, provider)
+    const email = result.user.email || ''
+
+    if (!isValidMUJEmail(email)) {
+      return {
+        success: false,
+        error: `Only @muj.manipal.edu accounts are allowed. You signed in with ${email}.`,
+      }
+    }
+
+    // Mark as verified in Firebase DB (same schema as magic link)
+    await set(ref(database, `verifiedUsers/${result.user.uid}`), {
+      email,
+      verifiedAt: serverTimestamp(),
+    })
+
+    return { success: true, email }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('auth/popup-closed-by-user') || msg.includes('auth/cancelled-popup-request')) {
+      return { success: false, error: '' } // user dismissed — no toast needed
+    }
+    if (msg.includes('auth/popup-blocked')) {
+      return { success: false, error: 'Popup was blocked. Please allow popups for this site and try again.' }
+    }
+    console.error('verifyWithGoogle error:', err)
+    return { success: false, error: 'Google sign-in failed. Please try again.' }
+  }
 }
 
 // ── Step 1: Send the magic link ────────────────────────────────────────────────
