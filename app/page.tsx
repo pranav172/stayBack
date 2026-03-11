@@ -175,15 +175,15 @@ export default function LandingPage() {
   return (
     <div style={{
       minHeight: '100dvh', height: '100dvh',
-      backgroundColor: '#0a0a12', position: 'relative',
-      overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
+      position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column',
     }}>
       {/* Tour — only renders after hydration to prevent SSR mismatch */}
       {mounted && showTour && <FeatureTour onClose={closeTour} />}
 
       {/* Background glow */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        <div style={{ position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)', width: '600px', height: '400px', borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(245,158,11,0.07) 0%, transparent 70%)' }} />
+        <div style={{ position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)', width: '600px', height: '400px', borderRadius: '50%', background: 'radial-gradient(ellipse, var(--accent-bg) 0%, transparent 70%)' }} />
       </div>
 
       <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }}>
@@ -271,15 +271,7 @@ export default function LandingPage() {
         </footer>
       </div>
 
-      <style>{`
-        .feature-card-inner:hover {
-          background: var(--hover-bg) !important;
-          border-color: transparent !important;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        }
-        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
-        @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
-      `}</style>
+
     </div>
   )
 }

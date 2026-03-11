@@ -25,7 +25,6 @@ export default function VerifyPage() {
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [generatedOtp, setGeneratedOtp] = useState('')
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -63,7 +62,8 @@ export default function VerifyPage() {
     try {
       const newOtp = generateOTP()
       await storeOTP(user.uid, trimmedEmail, newOtp)
-      setGeneratedOtp(newOtp) // For demo, show OTP (remove in production)
+      // NOTE: In production, email the OTP via a Cloud Function/API route.
+      // For now, admin can look up the code in Firebase → pendingVerifications/{uid}
       setStep('otp')
     } catch (err) {
       console.error(err)
@@ -102,12 +102,12 @@ export default function VerifyPage() {
     return (
       <div style={{ 
         minHeight: '100vh', 
-        backgroundColor: '#0a0a0f', 
+        backgroundColor: 'var(--bg-primary)', 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center' 
       }}>
-        <Loader2 className="animate-spin" size={32} color="#f59e0b" />
+        <Loader2 style={{ animation: 'spin 1s linear infinite' }} size={32} color="#f59e0b" />
       </div>
     )
   }
@@ -115,13 +115,12 @@ export default function VerifyPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#0a0a0f',
-      color: '#e4e4e7',
+      backgroundColor: 'var(--bg-primary)',
+      color: 'var(--text-primary)',
       padding: '24px',
-      fontFamily: 'system-ui, sans-serif'
     }}>
       <div style={{ maxWidth: '400px', margin: '0 auto' }}>
-        <Link href="/home" style={{ 
+        <Link href="/" style={{ 
           color: '#f59e0b', 
           textDecoration: 'none', 
           fontSize: '14px',
@@ -246,23 +245,17 @@ export default function VerifyPage() {
               We sent a 6-digit code to <strong style={{ color: '#fff' }}>{email}</strong>
             </p>
             
-            {/* Demo notice - remove in production */}
-            {generatedOtp && (
-              <div style={{
-                padding: '12px 16px',
-                backgroundColor: 'rgba(234, 179, 8, 0.1)',
-                border: '1px solid rgba(234, 179, 8, 0.3)',
-                borderRadius: '8px',
-                marginBottom: '24px'
-              }}>
-                <p style={{ color: '#eab308', fontSize: '12px' }}>
-                  🧪 Demo Mode: Your code is <strong>{generatedOtp}</strong>
-                </p>
-                <p style={{ color: '#71717a', fontSize: '11px', marginTop: '4px' }}>
-                  (Email sending not configured yet)
-                </p>
-              </div>
-            )}
+            <div style={{
+              padding: '10px 14px',
+              backgroundColor: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.2)',
+              borderRadius: '8px',
+              marginBottom: '24px'
+            }}>
+              <p style={{ color: '#f59e0b', fontSize: '12px' }}>
+                📬 Code sent! Check your MUJ email inbox (and spam).
+              </p>
+            </div>
             
             <form onSubmit={handleOtpSubmit}>
               <input
