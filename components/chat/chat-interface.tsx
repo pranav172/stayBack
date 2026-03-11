@@ -6,6 +6,7 @@ import { ref, push, set, get, onValue, update, remove, onDisconnect } from 'fire
 import { Send, Instagram, ArrowLeft, Users, Check, CheckCheck, X, Ghost, Flag, SkipForward, Clock, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { moderateMessage, getWarningMessage, CHAT_LIMITS, formatTimeRemaining } from '@/lib/moderation'
+import { generateVibeName } from '@/lib/vibe-names'
 import ReportModal from './report-modal'
 import FeedbackModal from './feedback-modal'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -44,6 +45,7 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const [showReportModal, setShowReportModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [partnerId, setPartnerId] = useState<string | null>(null)
+  const [partnerVibeName, setPartnerVibeName] = useState('')
   const [lastPartnerMessageTime, setLastPartnerMessageTime] = useState<number>(Date.now())
   const [showInactivityNudge, setShowInactivityNudge] = useState(false)
   const [nextButtonDisabled, setNextButtonDisabled] = useState(false)
@@ -51,6 +53,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   const [partnerTyping, setPartnerTyping] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null) // messageId
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
   const originalTitle = useRef('mujAnon')
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -179,6 +183,10 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
         }
         const partnerUid = chat.user1 === currentUserId ? chat.user2 : chat.user1
         setPartnerId(partnerUid)
+        // Set partner vibe name from chat node or derive from uid
+        const isUser1 = chat.user1 === currentUserId
+        const vibe = isUser1 ? (chat.vibeName1 || '') : (chat.vibeName2 || '')
+        setPartnerVibeName(vibe || generateVibeName(partnerUid))
         setChatMoods({ mood1: chat.mood1, mood2: chat.mood2, user1: chat.user1 })
         
         const mySession = sessionId.current
@@ -198,10 +206,8 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
   // Separate effect for partner online status (prevents nested listener leaks)
   useEffect(() => {
     if (!partnerId || chatEnded) return
-    console.log('[Chat] Watching partner connection:', `connections/${partnerId}`)
     const partnerConnRef = ref(database, `connections/${partnerId}`)
     const unsubPartner = onValue(partnerConnRef, (connSnap) => {
-      console.log('[Chat] Partner connection exists:', connSnap.exists(), connSnap.val())
       if (!chatEnded) setPartnerOnline(connSnap.exists())
     })
     return () => unsubPartner()
@@ -333,7 +339,6 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
 
   const endChat = useCallback(async () => {
     if (!chatId) return
-    console.log('[Chat] Ending chat', chatId)
     await set(ref(database, `chats/${chatId}/isActive`), false)
     // Also update both users' userChats index so stale entries don't persist
     const chatSnap = await get(ref(database, `chats/${chatId}`))
@@ -393,9 +398,14 @@ export default function ChatInterface({ chatId, currentUserId }: { chatId: strin
           </button>
           <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: partnerOnline ? '#10b981' : '#ef4444', boxShadow: partnerOnline ? '0 0 8px rgba(16, 185, 129, 0.5)' : 'none' }} />
           <div>
-            <span style={{ fontWeight: 500, color: '#ffffff', fontSize: '14px' }}>
-              {partnerOnline ? 'MUJian Online' : 'Disconnected'}
+            <span style={{ fontWeight: 600, color: '#ffffff', fontSize: '14px' }}>
+              {partnerOnline
+                ? (partnerVibeName ? partnerVibeName : 'MUJian Online')
+                : 'Disconnected'}
             </span>
+            {partnerVibeName && partnerOnline && (
+              <span style={{ fontSize: '10px', color: '#52525b', display: 'block' }}>anonymous · mujAnon</span>
+            )}
             {/* Show partner mood if available */}
             {chatMoods && partnerOnline && (() => {
               const partnerMood = chatMoods.user1 === currentUserId ? chatMoods.mood2 : chatMoods.mood1

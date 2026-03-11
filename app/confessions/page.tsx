@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { database, auth } from '@/lib/firebase'
-import { ref, push, set, onValue, increment } from 'firebase/database'
+import { ref, push, set, onValue, increment, query, orderByChild, limitToLast, endBefore } from 'firebase/database'
 import { onAuthStateChanged } from 'firebase/auth'
 import { Heart, X, MessageCircle, ArrowLeft, Send, ChevronDown, ChevronUp, Loader2, Edit3, Flag, Share2 } from 'lucide-react'
 import Link from 'next/link'
@@ -12,6 +12,12 @@ import { moderateMessage } from '@/lib/moderation'
 
 const MAX_CHARS = 280
 const MAX_POSTS_PER_DAY = 3
+
+interface Reply {
+  id: string
+  text: string
+  timestamp: number
+}
 
 interface Comment {
   id: string
@@ -25,6 +31,7 @@ interface Confession {
   timestamp: number
   hearts: number
   comments?: Record<string, Comment>
+  replies?: Record<string, Reply>
   expiresAt?: number
 }
 
@@ -57,6 +64,10 @@ function SwipeCard({
   const [showComments, setShowComments] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [comments, setComments] = useState<Comment[]>([])
+  const [showReply, setShowReply] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [replies, setReplies] = useState<Reply[]>([])
+  const [submittingReply, setSubmittingReply] = useState(false)
   const [dragDelta, setDragDelta] = useState(0)
   const [reported, setReported] = useState(false)
   const [reportToast, setReportToast] = useState(false)
@@ -73,6 +84,21 @@ function SwipeCard({
         ...(v as Omit<Comment, 'id'>),
       })).sort((a, b) => a.timestamp - b.timestamp)
       setComments(list)
+    })
+    return () => unsub()
+  }, [confession.id])
+
+  // Real-time replies
+  useEffect(() => {
+    if (!confession.id) return
+    const repliesRef = ref(database, `confessions/${confession.id}/replies`)
+    const unsub = onValue(repliesRef, (snap) => {
+      if (!snap.exists()) { setReplies([]); return }
+      const list = Object.entries(snap.val()).map(([id, v]) => ({
+        id,
+        ...(v as Omit<Reply, 'id'>),
+      })).sort((a, b) => a.timestamp - b.timestamp)
+      setReplies(list)
     })
     return () => unsub()
   }, [confession.id])
@@ -100,6 +126,24 @@ function SwipeCard({
       } else {
         console.error('Comment failed:', e)
       }
+    }
+  }
+
+  const handleReplySubmit = async () => {
+    const user = auth.currentUser
+    if (!replyText.trim() || !user || submittingReply) return
+    const result = moderateMessage(replyText)
+    if (!result.isClean) return
+    setSubmittingReply(true)
+    const text = replyText.trim()
+    setReplyText('')
+    try {
+      await push(ref(database, `confessions/${confession.id}/replies`), {
+        text,
+        timestamp: Date.now(),
+      })
+    } finally {
+      setSubmittingReply(false)
     }
   }
 
@@ -161,6 +205,7 @@ function SwipeCard({
   const skipOpacity = Math.min(1, -dragDelta / 80)
 
   const commentCount = comments.length
+  const replyCount = replies.length
 
   if (!isTop) {
     return (
@@ -243,6 +288,16 @@ function SwipeCard({
             })()}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Reply count badge */}
+            {replyCount > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowReply(true) }}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', padding: '4px', fontSize: '12px' }}
+              >
+                <Send size={11} />
+                {replyCount}
+              </button>
+            )}
             {/* Comment count badge */}
             {commentCount > 0 && (
               <button
@@ -274,6 +329,14 @@ function SwipeCard({
               <Heart size={14} style={{ fill: hearted ? '#ef4444' : 'none', color: hearted ? '#ef4444' : '#71717a' }} />
               {confession.hearts || 0}
             </span>
+            {/* Reply button — always visible */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowReply(!showReply) }}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: showReply ? '#6366f1' : '#71717a', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+            >
+              <Send size={13} />
+              {replyCount > 0 ? replyCount : 'Reply'}
+            </button>
             {/* Comments */}
             <button
               onClick={(e) => { e.stopPropagation(); setShowComments(!showComments) }}
@@ -329,6 +392,42 @@ function SwipeCard({
             </div>
           </div>
         )}
+
+        {/* Reply panel */}
+        {showReply && (
+          <div style={{
+            borderTop: '1px solid rgba(99,102,241,0.2)',
+            backgroundColor: 'rgba(10,10,20,0.95)',
+            maxHeight: '220px', display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {replies.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#52525b', fontSize: '12px', padding: '12px' }}>No replies yet. Be the first!</p>
+              ) : replies.map(r => (
+                <div key={r.id} style={{ backgroundColor: 'rgba(99,102,241,0.08)', borderRadius: '10px', padding: '8px 12px', borderLeft: '2px solid rgba(99,102,241,0.4)' }}>
+                  <p style={{ color: '#d4d4d8', fontSize: '13px', margin: '0 0 2px' }}>{r.text}</p>
+                  <span style={{ fontSize: '10px', color: '#52525b' }}>{timeAgo(r.timestamp)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(99,102,241,0.15)', display: 'flex', gap: '8px' }}>
+              <input
+                type="text" value={replyText}
+                onChange={e => setReplyText(e.target.value.slice(0, 200))}
+                onKeyDown={e => e.key === 'Enter' && handleReplySubmit()}
+                placeholder="Reply anonymously..."
+                style={{ flex: 1, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '8px 14px', color: '#e4e4e7', fontSize: '13px', outline: 'none' }}
+              />
+              <button
+                onClick={handleReplySubmit}
+                disabled={!replyText.trim() || submittingReply}
+                style={{ padding: '8px 12px', borderRadius: '20px', background: replyText.trim() ? 'linear-gradient(135deg,#6366f1,#818cf8)' : 'rgba(255,255,255,0.08)', border: 'none', cursor: replyText.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center' }}
+              >
+                {submittingReply ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} color={replyText.trim() ? '#fff' : '#52525b'} />}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -348,6 +447,10 @@ export default function ConfessionsPage() {
   const [authReady, setAuthReady] = useState(!!auth.currentUser)
   const [postError, setPostError] = useState('')
   const [sortMode, setSortMode] = useState<'new' | 'hot'>('new')
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const oldestTimestampRef = useRef<number | null>(null)
+  const PAGE_SIZE = 20
 
   // Wait for Firebase anonymous auth to complete
   useEffect(() => {
@@ -369,18 +472,51 @@ export default function ConfessionsPage() {
   }, [])
 
   useEffect(() => {
-    const confessRef = ref(database, 'confessions')
+    const confessRef = query(
+      ref(database, 'confessions'),
+      orderByChild('timestamp'),
+      limitToLast(PAGE_SIZE)
+    )
     const unsub = onValue(confessRef, (snapshot) => {
       if (!snapshot.exists()) { setConfessions([]); return }
       const now = Date.now()
       const list: Confession[] = Object.entries(snapshot.val())
         .map(([id, v]) => ({ id, ...(v as Omit<Confession, 'id'>) }))
         .filter(c => !c.expiresAt || c.expiresAt > now)
-        .sort((a, b) => b.timestamp - a.timestamp)  // always keep raw newest-first, we re-sort on render
+        .sort((a, b) => b.timestamp - a.timestamp)  // newest first
       setConfessions(list)
-    })
+      if (list.length > 0) {
+        oldestTimestampRef.current = list[list.length - 1].timestamp
+      }
+      setHasMore(list.length >= PAGE_SIZE)
+    }, { onlyOnce: true })
     return () => unsub()
   }, [])
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || oldestTimestampRef.current === null) return
+    setLoadingMore(true)
+    try {
+      const moreRef = query(
+        ref(database, 'confessions'),
+        orderByChild('timestamp'),
+        endBefore(oldestTimestampRef.current),
+        limitToLast(10)
+      )
+      const snap = await new Promise<import('firebase/database').DataSnapshot>(resolve => onValue(moreRef, resolve, { onlyOnce: true }))
+      if (!snap.exists()) { setHasMore(false); return }
+      const now = Date.now()
+      const more: Confession[] = Object.entries(snap.val())
+        .map(([id, v]) => ({ id, ...(v as Omit<Confession, 'id'>) }))
+        .filter(c => !c.expiresAt || c.expiresAt > now)
+        .sort((a, b) => b.timestamp - a.timestamp)
+      setConfessions(prev => [...prev, ...more])
+      if (more.length > 0) oldestTimestampRef.current = more[more.length - 1].timestamp
+      setHasMore(more.length >= 10)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const handleLike = useCallback(async () => {
     const c = confessions[currentIndex]

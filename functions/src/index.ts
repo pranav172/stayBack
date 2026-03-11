@@ -497,3 +497,102 @@ export const unbanDevice = functions.https.onCall(
     return { success: true };
   }
 );
+
+// ============================================
+// FCM PUSH NOTIFICATION — MATCH FOUND
+// ============================================
+
+/**
+ * Triggered whenever a new chat is created (i.e. two users are matched).
+ * Reads FCM tokens for both users and sends a push notification.
+ *
+ * Requires Blaze plan. Token stored at fcmTokens/{uid}/token by the client.
+ */
+export const onChatCreated = functions.database
+  .ref('chats/{chatId}')
+  .onCreate(async (snapshot, context) => {
+    const chat = snapshot.val();
+    if (!chat || !chat.isActive) return null;
+
+    const { user1, user2 } = chat as { user1: string; user2: string; isActive: boolean };
+    if (!user1 || !user2) return null;
+
+    // Fetch FCM tokens for both users in parallel
+    const [token1Snap, token2Snap] = await Promise.all([
+      db.ref(`fcmTokens/${user1}`).once('value'),
+      db.ref(`fcmTokens/${user2}`).once('value'),
+    ]);
+
+    const sendPromises: Promise<unknown>[] = [];
+
+    for (const tokenSnap of [token1Snap, token2Snap]) {
+      if (!tokenSnap.exists()) continue;
+      const { token, updatedAt } = tokenSnap.val() as { token: string; updatedAt: number };
+      if (!token) continue;
+
+      // Skip stale tokens (older than 60 days)
+      if (updatedAt && Date.now() - updatedAt > 60 * 24 * 60 * 60 * 1000) continue;
+
+      sendPromises.push(
+        admin.messaging().send({
+          token,
+          notification: {
+            title: 'Match Found! 🎉',
+            body: 'A fellow MUJian is ready to chat. Tap to open.',
+          },
+          webpush: {
+            notification: {
+              icon: 'https://stay-back.vercel.app/icon.png',
+              badge: 'https://stay-back.vercel.app/icon.png',
+              tag: 'match-notification',
+              requireInteraction: false,
+            },
+            fcmOptions: {
+              link: `https://stay-back.vercel.app/chat/${context.params.chatId}`,
+            },
+          },
+          data: {
+            chatId: context.params.chatId,
+            type: 'match_found',
+          },
+        }).catch((err: { code?: string }): Promise<void> | void => {
+          // Token is invalid or app unregistered — delete it
+          if (
+            err?.code === 'messaging/registration-token-not-registered' ||
+            err?.code === 'messaging/invalid-registration-token'
+          ) {
+            const uid = tokenSnap.key;
+            if (uid) return db.ref(`fcmTokens/${uid}`).remove().then(() => undefined);
+          }
+        })
+      );
+    }
+
+    await Promise.allSettled(sendPromises);
+    return null;
+  });
+
+// ============================================
+// CLEANUP STALE FCM TOKENS (Weekly)
+// ============================================
+
+export const cleanupStaleFcmTokens = functions.pubsub
+  .schedule('every 7 days')
+  .onRun(async () => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
+    const snap = await db.ref('fcmTokens').once('value');
+    if (!snap.exists()) return null;
+
+    const updates: Record<string, null> = {};
+    snap.forEach((child) => {
+      const data = child.val() as { updatedAt?: number };
+      if (!data.updatedAt || data.updatedAt < cutoff) {
+        updates[`fcmTokens/${child.key}`] = null;
+      }
+    });
+
+    if (Object.keys(updates).length > 0) {
+      await db.ref().update(updates);
+    }
+    return null;
+  });

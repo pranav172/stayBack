@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { database, auth } from '@/lib/firebase'
-import { ref, push, set, get, onValue, remove } from 'firebase/database'
+import { ref, push, set, get, onValue, remove, runTransaction } from 'firebase/database'
 import { onAuthStateChanged } from 'firebase/auth'
-import { ArrowLeft, Users, Send, X, Zap, Loader2 } from 'lucide-react'
+import { ArrowLeft, Send, Zap, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useConnection } from '@/components/connection-provider'
@@ -79,33 +79,79 @@ export default function GroupsPage() {
     const user = auth.currentUser
     if (!user || joining) return
     setJoining(true)
+    setJoinError('')
     try {
-      const snap = await get(ref(database, 'groupChats'))
-      let roomId: string | null = null
-      let label = 'A'
-      if (snap.exists()) {
-        const now = Date.now()
-        for (const [id, v] of Object.entries(snap.val())) {
-          const r = v as { isActive?: boolean; createdAt?: number; members?: Record<string, string> }
-          const memberKeys = Object.keys(r.members || {})
-          if (r.isActive && r.createdAt && (now - r.createdAt < GROUP_DURATION_MS) && memberKeys.length < MAX_GROUP_SIZE) {
+      // runTransaction gives us atomic read-modify-write:
+      // two users joining at the same moment will serialize correctly.
+      // We operate on the entire groupChats node and either slot into an
+      // existing room or create a new one in a single atomic operation.
+      const now = Date.now()
+      let chosenRoomId: string | null = null
+      let chosenLabel = 'A'
+
+      const groupChatsRef = ref(database, 'groupChats')
+      const { committed, snapshot } = await runTransaction(groupChatsRef, (current) => {
+        if (current === null) {
+          // No rooms at all — create first one
+          const newKey = push(groupChatsRef).key!
+          const next: Record<string, unknown> = {
+            [newKey]: {
+              isActive: true,
+              createdAt: now,
+              members: { [user.uid]: 'A' },
+            },
+          }
+          chosenRoomId = newKey
+          chosenLabel = 'A'
+          return next
+        }
+
+        // Find an open room
+        for (const [id, room] of Object.entries(current as Record<string, { isActive?: boolean; createdAt?: number; members?: Record<string, string> }>)) {
+          const r = room
+          const memberKeys = Object.keys(r?.members || {})
+          if (
+            r?.isActive &&
+            r?.createdAt &&
+            now - r.createdAt < GROUP_DURATION_MS &&
+            memberKeys.length < MAX_GROUP_SIZE &&
+            !memberKeys.includes(user.uid)
+          ) {
             const usedLabels = Object.values(r.members || {})
             const nextLabel = LABELS.find(l => !usedLabels.includes(l)) || 'A'
-            label = nextLabel; roomId = id; break
+            // Slot into this room atomically
+            current[id].members = { ...r.members, [user.uid]: nextLabel }
+            chosenRoomId = id
+            chosenLabel = nextLabel
+            return current // return mutated data to commit
           }
         }
+
+        // No suitable room — create new one
+        const newKey = push(groupChatsRef).key!
+        current[newKey] = {
+          isActive: true,
+          createdAt: now,
+          members: { [user.uid]: 'A' },
+        }
+        chosenRoomId = newKey
+        chosenLabel = 'A'
+        return current
+      })
+
+      if (!committed || !snapshot || !chosenRoomId) {
+        setJoinError('Room is full — please try again.')
+        return
       }
-      if (!roomId) {
-        const newRoomRef = push(ref(database, 'groupChats'))
-        roomId = newRoomRef.key!
-        await set(newRoomRef, { isActive: true, createdAt: Date.now(), members: { [user.uid]: 'A' } })
-        label = 'A'
-      } else {
-        await set(ref(database, `groupChats/${roomId}/members/${user.uid}`), label)
-      }
-      setMyLabel(label)
-      setActiveRoomId(roomId)
-    } finally { setJoining(false) }
+
+      setMyLabel(chosenLabel)
+      setActiveRoomId(chosenRoomId)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : ''
+      setJoinError(msg || 'Failed to join — please try again.')
+    } finally {
+      setJoining(false)
+    }
   }, [joining])
 
   // Listen to active room

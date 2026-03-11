@@ -47,7 +47,6 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log('[ConnectionProvider] Auth ready, uid:', user.uid)
         myUidRef.current = user.uid
         setUserId(user.uid)
 
@@ -72,7 +71,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
               odUserId: user.uid,
               connectedAt: serverTimestamp(),
               lastSeen: now,
-            }).catch(e => console.error('[ConnectionProvider] Connection write error:', e))
+            }).catch(() => {})
 
             // Heartbeat: refresh lastSeen every 20s
             if (heartbeatRef.current) clearInterval(heartbeatRef.current)

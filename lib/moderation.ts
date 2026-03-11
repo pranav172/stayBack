@@ -137,13 +137,3 @@ export function formatTimeRemaining(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-/**
- * Calculate reputation-based queue priority
- * Lower number = higher priority (faster matching)
- */
-export function calculateQueuePriority(reportCount: number, warnings: number): number {
-  // Base priority is 100
-  // Each report adds 20 to priority (longer wait)
-  // Each warning adds 10
-  return 100 + (reportCount * 20) + (warnings * 10)
-}

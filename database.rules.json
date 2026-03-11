@@ -141,6 +141,12 @@
             ".write": "auth != null && (!root.child('userMeta').child(auth.uid).child('lastCommentAt').exists() || (now - root.child('userMeta').child(auth.uid).child('lastCommentAt').val()) > 6000)",
             ".validate": "newData.hasChildren(['text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 200"
           }
+        },
+        "replies": {
+          "$replyId": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['text', 'timestamp']) && newData.child('text').isString() && newData.child('text').val().length <= 280"
+          }
         }
       }
     },

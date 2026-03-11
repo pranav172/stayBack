@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, Zap, Square, Users, ShieldCheck, BadgeCheck, ChevronDown, ChevronUp } from 'lucide-react'
 import { checkShadowban } from '@/lib/shadowban'
 import { checkVerificationStatus } from '@/lib/email-verification'
+import { generateVibeName } from '@/lib/vibe-names'
 import { requestNotificationPermission, listenForMatchNotification, stopMatchNotificationListener } from '@/lib/notifications'
 import { track, EVENTS, initAnalytics, identifyUser } from '@/lib/analytics'
 import { useConnection } from '@/components/connection-provider'
@@ -90,6 +91,7 @@ function MatchButtonInner() {
   const [isVerified, setIsVerified] = useState(false)
   const [isShadowbanned, setIsShadowbanned] = useState(false)
   const [showPrefs, setShowPrefs] = useState(false)
+  const myVibeName = userId ? generateVibeName(userId) : ''
 
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const queueRef = useRef<string | null>(null)
@@ -191,6 +193,7 @@ function MatchButtonInner() {
             session1: matchData.sessionId, session2: sessionId.current,
             mode: selectedMode, tags: [...new Set([...selectedTags, ...(matchData.tags || [])])],
             mood1: null, mood2: null,
+            vibeName1: matchData.vibeName || '', vibeName2: myVibeName,
             createdAt: serverTimestamp(), isActive: true,
           })
           await set(ref(database, `userChats/${matchData.userId}/${chatId}`), { sessionId: matchData.sessionId, isActive: true })
@@ -206,6 +209,7 @@ function MatchButtonInner() {
       await set(myQueueRef, {
         userId, sessionId: sessionId.current, connectionId: userId,
         mode: selectedMode, tags: selectedTags, mood: '', isVerified,
+        vibeName: myVibeName,
         timestamp: serverTimestamp(),
       })
       onDisconnect(myQueueRef).remove()

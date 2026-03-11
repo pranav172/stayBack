@@ -9,7 +9,6 @@ import {
   checkOffensiveContent,
   checkSensitiveInfo,
   getWarningMessage,
-  calculateQueuePriority,
   formatTimeRemaining,
 } from '../lib/moderation'
 
@@ -135,25 +134,6 @@ describe('getWarningMessage', () => {
     const msg = getWarningMessage('unknown_reason' as any)
     expect(typeof msg).toBe('string')
     expect(msg.length).toBeGreaterThan(0)
-  })
-})
-
-// ══════════════════════════════════════════════════════════════════════════════════════
-// 5. QUEUE PRIORITY
-// ══════════════════════════════════════════════════════════════════════════════════════
-describe('calculateQueuePriority', () => {
-  it('clean users get base priority (100)', () => {
-    expect(calculateQueuePriority(0, 0)).toBe(100)
-  })
-  it('each report adds to priority (longer wait)', () => {
-    expect(calculateQueuePriority(1, 0)).toBeGreaterThan(100)
-    expect(calculateQueuePriority(5, 0)).toBeGreaterThan(calculateQueuePriority(1, 0))
-  })
-  it('warnings also increase priority', () => {
-    expect(calculateQueuePriority(0, 3)).toBeGreaterThan(100)
-  })
-  it('returns a number', () => {
-    expect(typeof calculateQueuePriority(2, 1)).toBe('number')
   })
 })
 
